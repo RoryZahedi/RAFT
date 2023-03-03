@@ -126,3 +126,64 @@ class ClientNumber(object):
             google_dot_protobuf_dot_empty__pb2.Empty.FromString,
             options, channel_credentials,
             insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
+
+
+class RequestVoteStub(object):
+    """Missing associated documentation comment in .proto file."""
+
+    def __init__(self, channel):
+        """Constructor.
+
+        Args:
+            channel: A grpc.Channel.
+        """
+        self.SendVoteRequest = channel.unary_unary(
+                '/messaging.RequestVote/SendVoteRequest',
+                request_serializer=messaging__pb2.Term.SerializeToString,
+                response_deserializer=messaging__pb2.electionRequestRepsonse.FromString,
+                )
+
+
+class RequestVoteServicer(object):
+    """Missing associated documentation comment in .proto file."""
+
+    def SendVoteRequest(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+
+def add_RequestVoteServicer_to_server(servicer, server):
+    rpc_method_handlers = {
+            'SendVoteRequest': grpc.unary_unary_rpc_method_handler(
+                    servicer.SendVoteRequest,
+                    request_deserializer=messaging__pb2.Term.FromString,
+                    response_serializer=messaging__pb2.electionRequestRepsonse.SerializeToString,
+            ),
+    }
+    generic_handler = grpc.method_handlers_generic_handler(
+            'messaging.RequestVote', rpc_method_handlers)
+    server.add_generic_rpc_handlers((generic_handler,))
+
+
+ # This class is part of an EXPERIMENTAL API.
+class RequestVote(object):
+    """Missing associated documentation comment in .proto file."""
+
+    @staticmethod
+    def SendVoteRequest(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(request, target, '/messaging.RequestVote/SendVoteRequest',
+            messaging__pb2.Term.SerializeToString,
+            messaging__pb2.electionRequestRepsonse.FromString,
+            options, channel_credentials,
+            insecure, call_credentials, compression, wait_for_ready, timeout, metadata)

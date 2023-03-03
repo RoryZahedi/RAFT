@@ -11,10 +11,31 @@ message Response {
     string message = 1;
 }
 
+message Term{
+    int32 term = 1;
+}
+
+message recipientTerm{
+    int32 term = 1;
+}
+
+message voteGranted{
+    bool vote = 1;
+}
+
+message electionRequestRepsonse{
+    recipientTerm rt = 1;
+    voteGranted vg = 2;
+}
+
 service Messaging {
     rpc SendMessage(Request) returns (Response) {}
 }
 
 service ClientNumber{
     rpc SendClientNumber(Request) returns (google.protobuf.Empty) {}
+}
+
+service RequestVote{
+    rpc SendVoteRequest(Term) returns (electionRequestRepsonse) {}
 }
