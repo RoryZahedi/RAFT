@@ -42,7 +42,7 @@ class RequestVoteServicer(messaging_pb2_grpc.RequestVoteServicer):
         elif(receivedTerm < term):
             votedFor = False
         elif(receivedTerm == term): # TODO: REMOVE THIS!!! This is not part of RAFT
-            if(int(otherClientNumber) > int(clientNum)):
+            if(int(otherClientNumber) > int(clientNum) and votedFor == False):
                 votedFor = True
             else:
                 votedFor = False
@@ -102,12 +102,14 @@ def run():
 
 def heartBeatTimeout():
     global heartBeatTimer, state
-    print("in heartbeat")
     while True:
+        print("in heartbeat")
+        print("heartbeattimer:",heartBeatTimer)
         while heartBeatTimer and state == 'f':
             time.sleep(1)
             heartBeatTimer -= 1
         if state == 'f':
+            state = 'c'
             election()
        
         
@@ -129,9 +131,12 @@ def sendElectionRequests():
             
 
 def election():
+    global clientNum,clientNumberStubs,messageStubs,requestVotesStub,term,votedFor,forfeit,state,heartBeatTimer,electionTimeoutReturn,numVotes
+
+    if state == 'f' or state == 'l':
+        print("Incorrect state:",state)
+        return
     print("in election")
-    global clientNum,clientNumberStubs,messageStubs,requestVotesStub,term,votedFor,forfeit,state,heartBeatTimer,electionTimeoutReturn
-    state = 'c'
     electionTimeoutReturn = 0
     term += 1
     numVotes = 1
