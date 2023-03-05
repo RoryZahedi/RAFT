@@ -9,9 +9,11 @@ from _thread import *
 import random
 from google.protobuf import empty_pb2
 
+otherClient = {} #IP/Port -> ClientNum
 
 class MessagingServicer(messaging_pb2_grpc.MessagingServicer):
     def SendMessage(self, request, context):
+        time.sleep(3)
         peer_ip = context.peer().split(":")[-1]
         print(f"Received message: {request.message} from {peer_ip}")
         print()
@@ -20,22 +22,30 @@ class MessagingServicer(messaging_pb2_grpc.MessagingServicer):
 class ClientNumberServicer(messaging_pb2_grpc.ClientNumberServicer):
     def SendClientNumber(self, request, context):
         peer_ip = context.peer().split(":")[-1]
-        print(f"Received message: {request.message} from {peer_ip}")
+        otherClient[peer_ip] = request.message
+        print(f"Received message: {request.message} from {otherClient[peer_ip]}")
         print()
         return empty_pb2.Empty()
     
 class RequestVoteServicer(messaging_pb2_grpc.RequestVoteServicer):
     def SendVoteRequest(self,request,context):
-        global term,votedFor
+        time.sleep(3)
+        global term,votedFor,forfeit
         peer_ip = context.peer().split(":")[-1]
+        otherClientNumber = otherClient[peer_ip]
+
         receivedTerm = request.term #might be .term or .message
-        print(f"Received vote from {peer_ip} with term {receivedTerm}")
+        print(f"Received vote request from {otherClientNumber} with term {receivedTerm}")
         if(receivedTerm > term):
             term = receivedTerm
             votedFor = True
         elif(receivedTerm < term):
             votedFor = False
-            forfeit = 1
+        elif(receivedTerm == term): # TODO: REMOVE THIS!!! This is not part of RAFT
+            if(int(otherClientNumber) > int(clientNum)):
+                votedFor = True
+            else:
+                votedFor = False
         response = messaging_pb2.electionRequestResponse(
             rt=messaging_pb2.recipientTerm(term=term),
             vg=messaging_pb2.voteGranted(vote=votedFor)
@@ -58,10 +68,8 @@ def serve(clientNum):
 
 
 def run():
-    global clientNum
-    clientNumberStubs = []
-    messageStubs = []
-    requestVotesStub = []
+    global clientNum,clientNumberStubs,messageStubs,requestVotesStub 
+    
     for i in range(0,5): #Initalize clientNumberStubs with clientNumberStubs to send clientNumbers
         if str(i) != clientNum: 
             port = 'localhost:5005'+str(i)
@@ -77,12 +85,12 @@ def run():
         if str(i) != clientNum:
             message = str(clientNum)
             nullret = clientNumberStubs[i].SendClientNumber(messaging_pb2.Request(message=message))
-    input()
-    for i in range(0,5): 
-        if str(i) != clientNum:
-            message = str(term)
-            retval = requestVotesStub[i].SendVoteRequest(messaging_pb2.Term(term=term))
-            print("votegranted = ",retval.vg.vote, "and recipient term = ",retval.rt.term)
+    
+    # for i in range(0,5): 
+    #     if str(i) != clientNum:
+    #         message = str(term)
+    #         retval = requestVotesStub[i].SendVoteRequest(messaging_pb2.Term(term=term))
+    #         print("votegranted = ",retval.vg.vote, "and recipient term = ",retval.rt.term)
     # while True:
     #     message = input("Enter a message to send: ")
     #     for stub in messageStubs:
@@ -92,70 +100,78 @@ def run():
 
 
 
-# def heartBeatTimeout():   
-#     while True:
-#         while heartBeatTimeout:
-#             time.sleep(1)
-#             heartBeatTimeout-= 1
-#         election()
+def heartBeatTimeout():
+    global heartBeatTimer, state
+    print("in heartbeat")
+    while True:
+        while heartBeatTimer and state == 'f':
+            time.sleep(1)
+            heartBeatTimer -= 1
+        if state == 'f':
+            election()
        
         
-# def sendElectionRequests():
-    #for client in otherClients:
-        #sendElectionRequest rpc to client
-        #message = str(clientNum)
-        #recipientTerm,votedFor = client.SendClientNumber(messaging_pb2.Request(message=message))
-        #if votedFor:
-            #numVotes+=1
-        # else:
-        #     if recipientTerm > term:
-        #         forfeit = 1
+def sendElectionRequests():
+    global clientNum,clientNumberStubs,messageStubs,requestVotesStub,term,votedFor,forfeit,numVotes
+    for i in range(0,5):
+        if str(i) != clientNum:
+            print("Sending request to client",i)
+            retval = requestVotesStub[i].SendVoteRequest(messaging_pb2.Term(term=term))
+            recipientTerm = retval.rt.term
+            votedFor = retval.vg.vote
+            if votedFor:
+                numVotes+=1
+            else:
+                if recipientTerm > term:
+                    term = recipientTerm
+                    forfeit = 1
             
 
+def election():
+    print("in election")
+    global clientNum,clientNumberStubs,messageStubs,requestVotesStub,term,votedFor,forfeit,state,heartBeatTimer,electionTimeoutReturn
+    state = 'c'
+    electionTimeoutReturn = 0
+    term += 1
+    votedFor = clientNum
+    numVotes = 1
+    electionTimer = random.randint(6,12)
+    sendElectionRequests()
+    start_new_thread(electionTimeout, (electionTimer,))   # start timer 
+    while electionTimeoutReturn != 1 and numVotes < 3 and forfeit != 1:
+        time.sleep(.1)
+
+    if electionTimeoutReturn:
+        print("starting another election")
+        time.sleep(2)
+        election()
+    elif numVotes > 2:
+        print("IM LEADER")
+        time.sleep(10)
+        state = 'l'
+        #start sending heartbeats
+    elif forfeit == 1:
+        state = 'f'
+        numVotes = 0
+        heartBeatTimer = random.randint(6,12)
+    else:
+        print("something unexpected happened")
 
 
-# def election():
-#     electionTimeoutReturn = 0
-#     state = 'c'
-#     term += 1
-#     votedFor = clientNum
-#     numVotes = 1
-#     electionTimer = random.randint(6,12)
-#     #Send election requests to everyone (term)
-#     start_new_thread(electionTimeout, (electionTimer,))   # start timer 
-#     while electionTimeoutReturn != 1 or numVotes < 3 or forfeit != 0:
-#         time.sleep(.1)
-#     if electionTimeoutReturn:
-#         election()
-#     elif numVotes > 2:
-#         state = 'l'
-#         #start sending heartbeats
-#     elif forfeit == 1:
-#         state = 'f'
-#         #Set voted for, for person who caused you to forfeit
-#         numVotes = 0
-#         #set term to be whatever process made us forfeit
-#     else:
-#         print("something unexpected happened")
-
-
-        
-
-# def electionTimeout(t):
-#     while t:
-#         time.sleep(1)
-#         t-= 1
-#     electionTimeoutReturn = 1
+    
+def electionTimeout(t):
+    global electionTimeoutReturn
+    print("in election timeout")
+    while t:
+        # print(t)
+        time.sleep(1)
+        t-= 1
+    electionTimeoutReturn = 1
 
 
 
 
        
-
-
-
-
-
 if __name__ == '__main__':
     print("Client num:",end="")
     clientNum = input()
@@ -163,14 +179,18 @@ if __name__ == '__main__':
     print("Press enter to start")
     input()
     
+    clientNumberStubs = []
+    messageStubs = []
+    requestVotesStub = []
+
     state = 'f'
     term = 0    
     votedFor = -1
     numVotes = 0
     heartBeatTimer = random.randint(6,12)
-    forfeit = 0
-    
-    
+    electionTimeoutReturn = 0
+    forfeit = 0   # start timer  
     run()
+    start_new_thread(heartBeatTimeout, ())
     while True:
         time.sleep(1)
