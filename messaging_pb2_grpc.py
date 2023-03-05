@@ -140,7 +140,7 @@ class RequestVoteStub(object):
         self.SendVoteRequest = channel.unary_unary(
                 '/messaging.RequestVote/SendVoteRequest',
                 request_serializer=messaging__pb2.Term.SerializeToString,
-                response_deserializer=messaging__pb2.electionRequestRepsonse.FromString,
+                response_deserializer=messaging__pb2.electionRequestResponse.FromString,
                 )
 
 
@@ -159,7 +159,7 @@ def add_RequestVoteServicer_to_server(servicer, server):
             'SendVoteRequest': grpc.unary_unary_rpc_method_handler(
                     servicer.SendVoteRequest,
                     request_deserializer=messaging__pb2.Term.FromString,
-                    response_serializer=messaging__pb2.electionRequestRepsonse.SerializeToString,
+                    response_serializer=messaging__pb2.electionRequestResponse.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -184,6 +184,6 @@ class RequestVote(object):
             metadata=None):
         return grpc.experimental.unary_unary(request, target, '/messaging.RequestVote/SendVoteRequest',
             messaging__pb2.Term.SerializeToString,
-            messaging__pb2.electionRequestRepsonse.FromString,
+            messaging__pb2.electionRequestResponse.FromString,
             options, channel_credentials,
             insecure, call_credentials, compression, wait_for_ready, timeout, metadata)

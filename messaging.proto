@@ -23,7 +23,7 @@ message voteGranted{
     bool vote = 1;
 }
 
-message electionRequestRepsonse{
+message electionRequestResponse{
     recipientTerm rt = 1;
     voteGranted vg = 2;
 }
@@ -37,5 +37,5 @@ service ClientNumber{
 }
 
 service RequestVote{
-    rpc SendVoteRequest(Term) returns (electionRequestRepsonse) {}
+    rpc SendVoteRequest(Term) returns (electionRequestResponse) {}
 }
