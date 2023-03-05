@@ -118,8 +118,9 @@ def sendElectionRequests():
             print("Sending request to client",i)
             retval = requestVotesStub[i].SendVoteRequest(messaging_pb2.Term(term=term))
             recipientTerm = retval.rt.term
-            votedFor = retval.vg.vote
-            if votedFor:
+            receivedVote = bool(retval.vg.vote)
+            if receivedVote:
+                print("Received vote from",i)
                 numVotes+=1
             else:
                 if recipientTerm > term:
@@ -133,14 +134,14 @@ def election():
     state = 'c'
     electionTimeoutReturn = 0
     term += 1
-    votedFor = clientNum
     numVotes = 1
+    forfeit = 0
     electionTimer = random.randint(6,12)
     sendElectionRequests()
     start_new_thread(electionTimeout, (electionTimer,))   # start timer 
     while electionTimeoutReturn != 1 and numVotes < 3 and forfeit != 1:
         time.sleep(.1)
-
+    print(electionTimeoutReturn,numVotes,forfeit)
     if electionTimeoutReturn:
         print("starting another election")
         time.sleep(2)
