@@ -8,6 +8,7 @@ import ipaddress
 from _thread import *
 import random
 from google.protobuf import empty_pb2
+import threading
 
 otherClient = {} #IP/Port -> ClientNum
 
@@ -29,28 +30,31 @@ class ClientNumberServicer(messaging_pb2_grpc.ClientNumberServicer):
     
 class RequestVoteServicer(messaging_pb2_grpc.RequestVoteServicer):
     def SendVoteRequest(self,request,context):
+        global currentTerm, votedFor, electionTimer,forfeit
         time.sleep(3)
-        global term,votedFor,forfeit
+        print(f"Received vote request from {otherClientNumber} with term {receivedTerm}")
         peer_ip = context.peer().split(":")[-1]
         otherClientNumber = otherClient[peer_ip]
-
-        receivedTerm = request.term #might be .term or .message
-        print(f"Received vote request from {otherClientNumber} with term {receivedTerm}")
-        if(receivedTerm > term):
-            term = receivedTerm
-            votedFor = True
-        elif(receivedTerm < term):
-            votedFor = False
-        elif(receivedTerm == term): # TODO: REMOVE THIS!!! This is not part of RAFT
-            if(int(otherClientNumber) > int(clientNum) and votedFor == False):
-                votedFor = True
-            else:
-                votedFor = False
+        receivedTerm = request.term 
+        voteGranted = False
+        if currentTerm < receivedTerm:
+            currentTerm = receivedTerm
+            votedFor = -1
+            if state != "follower":
+                forfeit = 1
+                state = "follower"
+                print("Forfeiting election for term",currentTerm)
+                electionTimer = random.randInt(6, 12)
+        if currentTerm == receivedTerm and (votedFor == -1 or votedFor == otherClientNumber) and clientNum > otherClientNumber:
+            votedFor = otherClientNumber
+            voteGranted = True
+            electionTimer = random.randInt(6, 12)
         response = messaging_pb2.electionRequestResponse(
-            rt=messaging_pb2.recipientTerm(term=term),
-            vg=messaging_pb2.voteGranted(vote=votedFor)
+            rt=messaging_pb2.recipientTerm(term=currentTerm),
+            vg=messaging_pb2.voteGranted(vote=voteGranted)
         )
         return response
+    
 def serve(clientNum):
     server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
     messaging_pb2_grpc.add_MessagingServicer_to_server(MessagingServicer(), server)
@@ -100,80 +104,79 @@ def run():
 
 
 
-def heartBeatTimeout():
-    global heartBeatTimer, state
-    while True:
-        print("in heartbeat")
-        print("heartbeattimer:",heartBeatTimer)
-        while heartBeatTimer and state == 'f':
-            time.sleep(1)
-            heartBeatTimer -= 1
-        if state == 'f':
-            state = 'c'
-            election()
-       
+
         
 def sendElectionRequests():
-    global clientNum,clientNumberStubs,messageStubs,requestVotesStub,term,votedFor,forfeit,numVotes
+    global clientNum,clientNumberStubs,messageStubs,requestVotesStub,numVotes
     for i in range(0,5):
         if str(i) != clientNum:
             print("Sending request to client",i)
-            retval = requestVotesStub[i].SendVoteRequest(messaging_pb2.Term(term=term))
-            recipientTerm = retval.rt.term
-            receivedVote = bool(retval.vg.vote)
-            if receivedVote:
-                print("Received vote from",i)
+            results = requestVotesStub[i].SendVoteRequest(messaging_pb2.Term(term=currentTerm))
+            receivedTerm = results.term.term #requested client's updated term
+            voteGranted = results.vg.vote #whether requested client gives vote to us or not
+            if voteGranted:
                 numVotes+=1
-            else:
-                if recipientTerm > term:
-                    term = recipientTerm
-                    forfeit = 1
-            
+
 
 def election():
-    global clientNum,clientNumberStubs,messageStubs,requestVotesStub,term,votedFor,forfeit,state,heartBeatTimer,electionTimeoutReturn,numVotes
-
-    if state == 'f' or state == 'l':
-        print("Incorrect state:",state)
-        return
-    print("in election")
-    electionTimeoutReturn = 0
-    term += 1
+    #add variable here
+    global clientNum, votedFor,numVotes,forfeit, electionTimer,state,currentTerm 
+    # global clientNum,clientNumberStubs,messageStubs,requestVotesStub,term,votedFor,forfeit,state,heartBeatTimer,electionTimeoutReturn,numVotes, votedServer
+    # global currentTerm,numVotes, electionTimer
+    # currentTerm+=1
+    # numvotes += 1
+    # electionTimer = random.randint(6,12)
+    # sendElectionRequests()
+    votedFor = clientNum
     numVotes = 1
     forfeit = 0
-    electionTimer = random.randint(6,12)
-    sendElectionRequests()
-    start_new_thread(electionTimeout, (electionTimer,))   # start timer 
-    while electionTimeoutReturn != 1 and numVotes < 3 and forfeit != 1:
+    start_new_thread(sendElectionRequests, ())
+    #either the election has timed out, i have received enough votes, or i have forfeited the election
+    while numVotes < 3 and forfeit != 1 and candidateElectionTimer > 0:
         time.sleep(.1)
-    print(electionTimeoutReturn,numVotes,forfeit)
-    if electionTimeoutReturn:
-        print("starting another election")
-        time.sleep(2)
-        election()
-    elif numVotes > 2:
-        print("IM LEADER")
-        time.sleep(10)
-        state = 'l'
-        #start sending heartbeats
+    
+    if numVotes >= 3:
+        state = 'leader'
+        print('I am the leader')
+        return
     elif forfeit == 1:
-        state = 'f'
-        numVotes = 0
-        heartBeatTimer = random.randint(6,12)
-    else:
-        print("something unexpected happened")
+        state = 'follower'
+        forfeit = 0
+        electionTimer = random.randInt(6, 12)
+        return
+    elif candidateElectionTimer == 0:
+        currentTerm += 1
+        return
+    
+
+    
+
+def candidateElectionTimeout():
+    global state 
+    while True:
+        if state != 'candidate':
+            return
+        candidateElectionTimer = random.randint(6, 12)
+        election_thread = threading.Thread(target=election)
+        election_thread.start()
+        while candidateElectionTimer > 0 and state == 'candidate':
+            time.sleep(1)
+            candidateElectionTimer-=1
+        election_thread.join()
 
 
     
-def electionTimeout(t):
-    global electionTimeoutReturn
-    print("in election timeout")
-    while t:
-        # print(t)
-        time.sleep(1)
-        t-= 1
-    electionTimeoutReturn = 1
-
+def electionTimeout():
+#     #Except if leader maybe the timer does not decrament
+    global electionTimer,state
+    while True:
+        while state == "follower":
+            while electionTimer:
+                time.sleep(1)
+                electionTimer-=1
+            print("Election timedout!")
+            state = "candidate"
+            candidateElectionTimeout()
 
 
 
@@ -188,15 +191,20 @@ if __name__ == '__main__':
     clientNumberStubs = []
     messageStubs = []
     requestVotesStub = []
-
-    state = 'f'
-    term = 0    
+    state = "follower"
+    currentTerm = 0
+    Heartbeattimeout = random.randint(6,12)
+    electionTimer = random.randint(6,12)
     votedFor = -1
     numVotes = 0
-    heartBeatTimer = random.randint(6,12)
-    electionTimeoutReturn = 0
-    forfeit = 0   # start timer  
-    run()
-    start_new_thread(heartBeatTimeout, ())
+    forfeit = 0
+    candidateElectionTimer = 1
+
+    electionTimeout()
+ 
+
+    # electionTimeoutReturn = 0
+
+    run() #initalize stubs
     while True:
         time.sleep(1)

@@ -15,7 +15,7 @@ message Term{
     int32 term = 1;
 }
 
-message recipientTerm{
+message receivedTerm{
     int32 term = 1;
 }
 
@@ -24,7 +24,7 @@ message voteGranted{
 }
 
 message electionRequestResponse{
-    recipientTerm rt = 1;
+    receivedTerm term = 1;
     voteGranted vg = 2;
 }
 
