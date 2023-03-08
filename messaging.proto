@@ -32,6 +32,10 @@ service Messaging {
     rpc SendMessage(Request) returns (Response) {}
 }
 
+service Heartbeat{
+    rpc SendHeartbeat(Request) returns (google.protobuf.Empty) {} 
+}
+
 service ClientNumber{
     rpc SendClientNumber(Request) returns (google.protobuf.Empty) {}
 }
