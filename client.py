@@ -55,7 +55,7 @@ class RequestVoteServicer(messaging_pb2_grpc.RequestVoteServicer):
                 state = "follower"
                 print("Forfeiting election for term",currentTerm)
                 electionTimer = random.randint(20, 30)
-        if currentTerm == receivedTerm and (votedFor == -1 or votedFor == otherClientNumber) and clientNum > otherClientNumber:
+        if currentTerm == receivedTerm and (votedFor == -1 or votedFor == otherClientNumber) and clientNum < otherClientNumber:
             if state != "follower":
                 forfeit = 1
                 state = "follower"
@@ -125,12 +125,15 @@ def run():
 
         
 def sendElectionRequests():
-    global clientNum,clientNumberStubs,messageStubs,requestVotesStub,numVotes
+    global clientNum,clientNumberStubs,messageStubs,requestVotesStub,numVotes,forfeit, currentTerm
     for i in range(0,5):
         if str(i) != clientNum:
             print("Sending request to client",i)
             results = requestVotesStub[i].SendVoteRequest(messaging_pb2.Term(term=currentTerm))
             receivedTerm = results.term.term #requested client's updated term
+            if receivedTerm > currentTerm:
+                currentTerm = receivedTerm
+                forfeit = 1
             voteGranted = results.vg.vote #whether requested client gives vote to us or not
             print(voteGranted)
             if voteGranted:
