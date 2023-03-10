@@ -113,12 +113,41 @@ def run():
     #         message = str(term)
     #         retval = requestVotesStub[i].SendVoteRequest(messaging_pb2.Term(term=term))
     #         print("votegranted = ",retval.vg.vote, "and recipient term = ",retval.rt.term)
-    # while True:
-    #     message = input("Enter a message to send: ")
-    #     for stub in messageStubs:
-    #         if stub != -1:
-    #             response = stub.SendMessage(messaging_pb2.Request(message=message))
-    #             print(f"Received response: {response.message}")
+
+
+def terminalInput():
+    while True: #terminal input
+        option = input()
+        match option:
+            case "create":
+                print("Selected: create")
+
+            case "put":
+                print("Selected: put")
+
+            case "get":
+                print("Selected: get")
+
+            case "printDict":
+                print("Selected: printDict")
+            
+            case "printAll":
+                print("Selected: printAll")
+    
+            case "failLink":
+                print("Selected: failLik")
+
+            case "fixLink":
+                print("Selected: fixLink")
+
+            case "failProcess":
+                print("Selected: failProcess")
+
+
+            case _:
+                print("Invalid input,",option)
+
+
 
 
 
@@ -226,6 +255,7 @@ if __name__ == '__main__':
     requestVotesStub = []
     heartbeatStubs = []
     run()
+    start_new_thread(terminalInput,())
     
 
    
