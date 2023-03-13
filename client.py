@@ -55,7 +55,7 @@ class RequestVoteServicer(messaging_pb2_grpc.RequestVoteServicer):
                 state = "follower"
                 print("Forfeiting election for term",currentTerm)
                 electionTimer = random.randint(20, 30)
-        if currentTerm == receivedTerm and (votedFor == -1 or votedFor == otherClientNumber) and clientNum < otherClientNumber:
+        if currentTerm == receivedTerm and (votedFor == -1 or votedFor == otherClientNumber) and clientNum > otherClientNumber:#TODO: hardcoded
             if state != "follower":
                 forfeit = 1
                 state = "follower"
@@ -69,6 +69,34 @@ class RequestVoteServicer(messaging_pb2_grpc.RequestVoteServicer):
             vg=messaging_pb2.voteGranted(vote=voteGranted)
         )
         return response
+
+class AppendEntriesServicer(messaging_pb2_grpc.AppendEntriesServicer):
+    def SendAppendEntries(self,request,context):
+        global currentTerm,state,forfeit, electionTimer, log
+        peer_ip = context.peer().split(":")[-1]
+        otherClientNumber = otherClient[peer_ip] #PID of other client
+        if currentTerm > request.term:
+            response = messaging_pb2.SendAppendEntriesResponse(
+                recipientTerm=messaging_pb2.Term(term=currentTerm),
+                success=messaging_pb2.appendedEntry(success=False)
+            )
+        elif currentTerm <= request.term:
+            currentTerm = request.term
+            if state != "follower":
+                state = "follower"
+                forfeit = 1
+                print("Forfeiting election for term",currentTerm)
+            electionTimer = random.randint(20, 30)
+            #implement log stuff later
+            log[request.prevLogIndex + 1] = request.entries[request.prevLogIndex + 1]
+            if log[request.prevLogIndex + 1][1] == True:
+                print(log[request.prevLogIndex + 1][2])
+            response = messaging_pb2.SendAppendEntriesResponse(
+                recipientTerm=messaging_pb2.Term(term=currentTerm),
+                success=messaging_pb2.appendedEntry(success=True)
+            )
+        return response
+
     
 def serve(clientNum):
     server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
@@ -86,9 +114,52 @@ def serve(clientNum):
     except KeyboardInterrupt:
         server.stop(0)
 
+def sendAppendEntries():
+    global currentTerm,clientNum,log,state,AppendEntriesStubs,CommitStubs
+    #  Term term = 1;
+    # Index prevLogIndex = 2;
+    # Term prevLogTerm = 3;
+    # Request entries = 4;//Log
+    # Index commitIndex = 5;
+    
+    if len(log) == 0:
+        prevLogTerm = -1
+    else:
+        prevLogTerm = log[len(log) - 1][0]
+    
+
+    prevLogIndex = len(log) - 1
+    log.append([currentTerm, -1, 8])
+    #append requested entry
+    #maybe make special cse for when log was empty prior to appending for the first time?
+
+    args = messaging_pb2.SendAppendEntriesArgs( 
+        term=messaging_pb2.Term(term = currentTerm),
+        prevLogIndex=messaging_pb2.Index(index = prevLogIndex),
+        prevLogTerm = messaging_pb2.Term(term = prevLogTerm),
+        entries = messaging_pb2.Request(entries = log),
+        commitIndex = messaging_pb2.Index(index = -1)
+    )
+        
+    successclients = [0]*5
+    for i in range(0,5):
+        if str(i) != clientNum: 
+            AppendEntriesResponse = AppendEntriesStubs[i].SendAppendEntries(messaging_pb2.Request(SendAppendEntriesArgs=args))
+            if AppendEntriesResponse.success:
+                successclients[i] += 1
+                if sum(successclients) == 3:
+                    log[-1][1] = True
+                    print(log[-1][2])
+                    for j in range(0,i):
+                        if str(j) != clientNum:
+                            nullret = CommitStubs[j].SendCommitUpdate()
+
+                    #issue commit update here
+                
+
 
 def run():
-    global clientNum,clientNumberStubs,messageStubs,requestVotesStub,heartbeatStubs
+    global clientNum,clientNumberStubs,messageStubs,requestVotesStub,heartbeatStubs,AppendEntriesStubs, CommitStubs
     
     for i in range(0,5): #Initalize clientNumberStubs with clientNumberStubs to send clientNumbers
         if str(i) != clientNum: 
@@ -98,21 +169,19 @@ def run():
             messageStubs.append(messaging_pb2_grpc.MessagingStub(channel))
             requestVotesStub.append(messaging_pb2_grpc.RequestVoteStub(channel))
             heartbeatStubs.append(messaging_pb2_grpc.HeartbeatStub(channel))
+            AppendEntriesStubs.append(messaging_pb2_grpc.AppendEntriesStub(channel))
+            CommitStubs.append(messaging_pb2_grpc.CommitStub(channel))
         else:
             clientNumberStubs.append(-1)
             messageStubs.append(-1)
             requestVotesStub.append(-1)
+            AppendEntriesStubs.append(-1)
             heartbeatStubs.append(-1)
+            CommitStubs.append(-1)
     for i in range(0,5): #Send initial message
         if str(i) != clientNum:
             message = str(clientNum)
             nullret = clientNumberStubs[i].SendClientNumber(messaging_pb2.Request(message=message))
-    
-    # for i in range(0,5): 
-    #     if str(i) != clientNum:
-    #         message = str(term)
-    #         retval = requestVotesStub[i].SendVoteRequest(messaging_pb2.Term(term=term))
-    #         print("votegranted = ",retval.vg.vote, "and recipient term = ",retval.rt.term)
 
 
 def terminalInput():
@@ -121,6 +190,7 @@ def terminalInput():
         match option:
             case "create":
                 print("Selected: create")
+                
 
             case "put":
                 print("Selected: put")
@@ -254,6 +324,8 @@ if __name__ == '__main__':
     messageStubs = []
     requestVotesStub = []
     heartbeatStubs = []
+    AppendEntriesStubs = []
+    CommitStubs = []
     run()
     start_new_thread(terminalInput,())
     
@@ -267,12 +339,10 @@ if __name__ == '__main__':
     numVotes = 0
     forfeit = 0
     candidateElectionTimer = 1
-
+    #term, committed, number
+    log = [[]]
+    #log = [[index, term, committed, dictionary_id, client_numbersthathaveaccess, dictionary public key, version],]
     electionTimeout()
- 
 
-    # electionTimeoutReturn = 0
-
-    run() #initalize stubs
     while True:
         time.sleep(1)
