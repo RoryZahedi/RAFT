@@ -99,20 +99,30 @@ class AppendEntriesServicer(messaging_pb2_grpc.AppendEntriesServicer):
 
             log[request.prevLogIndex.index + 1] = receivedLog[request.prevLogIndex.index + 1]
             if log[request.prevLogIndex.index + 1][1] == 1:
-                print(log[request.prevLogIndex.index + 1][2])
+                print(log)
             response = messaging_pb2.SendAppendEntriesResponse(
                 recipientTerm=messaging_pb2.Term(term=currentTerm),
                 success=messaging_pb2.appendedEntry(success=True)
             )
         return response
     
+class CommitServicer(messaging_pb2_grpc.CommitServicer):
+    def SendCommitUpdate(self,request,context):
+        print("Committing!")
+        global log
+        log[-1][2] = 1
+        print("log after commit:", log)
+        return empty_pb2.Empty()
+
+    
 def serve(clientNum):
-    server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
+    server = grpc.server(futures.ThreadPoolExecutor(max_workers=30))
     messaging_pb2_grpc.add_MessagingServicer_to_server(MessagingServicer(), server)
     messaging_pb2_grpc.add_ClientNumberServicer_to_server(ClientNumberServicer(), server)
     messaging_pb2_grpc.add_RequestVoteServicer_to_server(RequestVoteServicer(),server)
     messaging_pb2_grpc.add_HeartbeatServicer_to_server(HeartbeatServicer(),server)
     messaging_pb2_grpc.add_AppendEntriesServicer_to_server(AppendEntriesServicer(),server)
+    messaging_pb2_grpc.add_CommitServicer_to_server(CommitServicer(),server)
     port = '[::]:5005' + clientNum
     server.add_insecure_port(port)
     server.start()
@@ -166,7 +176,7 @@ def sendAppendEntriesFunc():
                     for j in range(0,i):
                         if str(j) != clientNum:
                             print("here send commit update")
-                            # nullret = CommitStubs[j].SendCommitUpdate()
+                            nullret = CommitStubs[j].SendCommitUpdate(empty_pb2.Empty())
 
             #         #issue commit update here
             
@@ -183,14 +193,14 @@ def run():
             requestVotesStub.append(messaging_pb2_grpc.RequestVoteStub(channel))
             heartbeatStubs.append(messaging_pb2_grpc.HeartbeatStub(channel))
             AppendEntriesStubs.append(messaging_pb2_grpc.AppendEntriesStub(channel))
-            # CommitStubs.append(messaging_pb2_grpc.CommitStub(channel))
+            CommitStubs.append(messaging_pb2_grpc.CommitStub(channel))
         else:
             clientNumberStubs.append(-1)
             messageStubs.append(-1)
             requestVotesStub.append(-1)
             AppendEntriesStubs.append(-1)
             heartbeatStubs.append(-1)
-            # CommitStubs.append(-1)
+            CommitStubs.append(-1)
     for i in range(0,5): #Send initial message
         if str(i) != clientNum:
             message = str(clientNum)
