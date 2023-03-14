@@ -49,7 +49,9 @@ class RequestVoteServicer(messaging_pb2_grpc.RequestVoteServicer):
         voteGranted = False
         if currentTerm < receivedTerm:
             currentTerm = receivedTerm
+            writeTermToFile()
             votedFor = -1
+            writeVotedForToFile()
             if state != "follower":
                 forfeit = 1
                 state = "follower"
@@ -62,6 +64,7 @@ class RequestVoteServicer(messaging_pb2_grpc.RequestVoteServicer):
                 print("Forfeiting election for term",currentTerm)
                 electionTimer = random.randint(20, 30)
             votedFor = otherClientNumber
+            writeVotedForToFile()
             voteGranted = True
             electionTimer = random.randint(20, 30)
         response = messaging_pb2.electionRequestResponse(
@@ -88,6 +91,8 @@ class AppendEntriesServicer(messaging_pb2_grpc.AppendEntriesServicer):
             )
         elif currentTerm <= request.term.term:
             currentTerm = request.term.term
+            writeTermToFile()
+
             if state != "follower":
                 state = "follower"
                 forfeit = 1
@@ -278,6 +283,9 @@ def sendElectionRequests():
             receivedTerm = results.term.term #requested client's updated term
             if receivedTerm > currentTerm:
                 currentTerm = receivedTerm
+                writeTermToFile()
+
+                file.write("CurrentTerm: " + str(currentTerm))
                 forfeit = 1
             voteGranted = results.vg.vote #whether requested client gives vote to us or not
             print(voteGranted)
@@ -290,6 +298,7 @@ def election():
     #add variable here
     global clientNum, votedFor,numVotes,forfeit, electionTimer,state,currentTerm,candidateElectionTimer
     votedFor = clientNum
+    writeVotedForToFile()
     numVotes = 1
     forfeit = 0
     start_new_thread(sendElectionRequests, ())
@@ -319,6 +328,7 @@ def candidateElectionTimeout():
         if state != 'candidate':
             return
         currentTerm = currentTerm + 1
+        writeTermToFile()
         candidateElectionTimer = random.randint(20, 30)
         election_thread = threading.Thread(target=election)
         election_thread.start()
@@ -358,7 +368,17 @@ def sendHeartBeats():
             nullret = heartbeatStubs[i].SendHeartbeat(messaging_pb2.Request(message=str(clientNum)))
 
 
+def writeTermToFile():
+    global lines,filename,currentTerm
+    lines[-3] = "CurrentTerm: " + str(currentTerm)
+    with open(filename, 'w') as file:
+        file.writelines(lines)
 
+def writeVotedForToFile():
+    global lines,filename,votedFor
+    lines[-2] = "VotedFor: " + str(votedFor)
+    with open(filename, 'w') as file:
+        file.writelines(lines)
        
 if __name__ == '__main__':
     print("Client num:",end="")
@@ -373,6 +393,12 @@ if __name__ == '__main__':
     heartbeatStubs = []
     AppendEntriesStubs = []
     CommitStubs = []
+    filename = "file"+str(clientNum)+".txt"
+
+    lines = [] #content of files
+    with open(filename, 'r') as file:
+        lines = file.readlines()
+
     run()
     start_new_thread(terminalInput,())
     
@@ -380,9 +406,14 @@ if __name__ == '__main__':
    
     state = "follower"
     currentTerm = 0
+    writeTermToFile()
+    
+    time.sleep(10)
+    
     heartbeatTimer = 0
     electionTimer = random.randint(20,30)
     votedFor = -1
+    writeVotedForToFile()
     numVotes = 0
     forfeit = 0
     candidateElectionTimer = 1
