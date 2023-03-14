@@ -111,6 +111,7 @@ class AppendEntriesServicer(messaging_pb2_grpc.AppendEntriesServicer):
                 while log[tempindex][0] != receivedLog[tempindex][0] and tempindex >= 0:
                     print("should not be here, this while loop should not be executed")
                     log = log.pop(-1)
+                    writeLogToFile()
                     tempindex -= 1
                 if len(log) < request.prevLogIndex.index + 1:
                     print("index 2")
@@ -119,10 +120,12 @@ class AppendEntriesServicer(messaging_pb2_grpc.AppendEntriesServicer):
                         if receivedLog[i][1] == 1: #if commited, do that action 
                             print(receivedLog[i][2])
                         log.append(receivedLog[i])
+                        writeLogToFile()
             print("about to append final entry")
             print(request.prevLogIndex.index + 1)
             print(log)
             log.append(receivedLog[request.prevLogIndex.index + 1])
+            writeLogToFile()
             print("its 121")
             print(log)
             print(request.prevLogIndex.index+1)
@@ -176,6 +179,7 @@ def sendAppendEntriesFunc():
 
     prevLogIndex = len(log) - 1
     log.append([currentTerm, 0, "hello"])
+    writeLogToFile()
     #append requested entry
     #maybe make special cse for when log was empty prior to appending for the first time?
     logString = ";".join([",".join(map(str, inner_lst)) for inner_lst in log])
@@ -284,8 +288,6 @@ def sendElectionRequests():
             if receivedTerm > currentTerm:
                 currentTerm = receivedTerm
                 writeTermToFile()
-
-                file.write("CurrentTerm: " + str(currentTerm))
                 forfeit = 1
             voteGranted = results.vg.vote #whether requested client gives vote to us or not
             print(voteGranted)
@@ -370,16 +372,26 @@ def sendHeartBeats():
 
 def writeTermToFile():
     global lines,filename,currentTerm
-    lines[-3] = "CurrentTerm: " + str(currentTerm)
+    lines[-3] = "CurrentTerm: " + str(currentTerm) + "\n"
     with open(filename, 'w') as file:
         file.writelines(lines)
 
 def writeVotedForToFile():
     global lines,filename,votedFor
-    lines[-2] = "VotedFor: " + str(votedFor)
+    lines[-2] = "VotedFor: " + str(votedFor) + "\n"
     with open(filename, 'w') as file:
         file.writelines(lines)
-       
+
+def writeLogToFile():
+    global lines,filename,log
+    if len(log) == 0:
+        lines[-1] = "log: " + "\n"
+    else:
+        print(log)
+        logString = ";".join([",".join(map(str, inner_lst)) for inner_lst in log])
+        lines[-1] = "log: " + logString + "\n"
+    with open(filename, 'w') as file:
+        file.writelines(lines)
 if __name__ == '__main__':
     print("Client num:",end="")
     clientNum = input()
@@ -393,14 +405,16 @@ if __name__ == '__main__':
     heartbeatStubs = []
     AppendEntriesStubs = []
     CommitStubs = []
+    run()
+    
+    start_new_thread(terminalInput,())
     filename = "file"+str(clientNum)+".txt"
 
     lines = [] #content of files
     with open(filename, 'r') as file:
         lines = file.readlines()
 
-    run()
-    start_new_thread(terminalInput,())
+    
     
 
    
@@ -419,6 +433,7 @@ if __name__ == '__main__':
     candidateElectionTimer = 1
     #term, committed, number
     log = []
+    writeLogToFile()
     #log = [[index, term, committed, dictionary_id, client_numbersthathaveaccess, dictionary public key, version],]
     electionTimeout()
   

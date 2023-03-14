@@ -19,4 +19,7 @@ MFswDQYJKoZIhvcNAQEBBQADSgAwRwJAb7Wf23HKpap70+cGuuBlrnflV3qYOYMz
 9yPy8wxuYuO/7L1Zxbo/OeTKoyhrAbhlGjgWBLm3xA04rltU4AnHvQIDAQAB
 
 MFswDQYJKoZIhvcNAQEBBQADSgAwRwJAZXMXYsHAA+hV6SXDqJ86zrDoeZd+xPW4
-CurrentTerm: 4VotedFor: 3
+
+CurrentTerm: 5
+VotedFor: 1
+log: 4,0,hello;4,0,hello;4,0,hello
