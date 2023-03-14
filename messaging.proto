@@ -19,13 +19,37 @@ message receivedTerm{
     int32 term = 1;
 }
 
+message Index{
+    int32 index = 1;
+}
+
 message voteGranted{
     bool vote = 1;
 }
 
+message appendedEntry{
+    bool success = 1;
+}
 message electionRequestResponse{
     receivedTerm term = 1;
     voteGranted vg = 2;
+}
+
+message SendAppendEntriesArgs{
+    Term term = 1;
+    Index prevLogIndex = 2;
+    Term prevLogTerm = 3;
+    Request entries = 4;//Log
+    Index commitIndex = 5;
+}
+
+message SendAppendEntriesResponse{
+    Term recipientTerm = 1;
+    appendedEntry success = 2;
+}
+
+message SendAppendEntriesArgsTwo{
+    Term term = 1;
 }
 
 service Messaging {
@@ -43,3 +67,13 @@ service ClientNumber{
 service RequestVote{
     rpc SendVoteRequest(Term) returns (electionRequestResponse) {}
 }
+
+service AppendEntries{
+    rpc SendAppendEntries(SendAppendEntriesArgs) returns (SendAppendEntriesResponse) {}
+}
+
+service Commit{
+    rpc SendCommitUpdate(google.protobuf.Empty) returns (google.protobuf.Empty) {}
+}
+
+

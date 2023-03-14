@@ -248,3 +248,186 @@ class RequestVote(object):
             messaging__pb2.electionRequestResponse.FromString,
             options, channel_credentials,
             insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
+
+
+class AppendEntriesStub(object):
+    """Missing associated documentation comment in .proto file."""
+
+    def __init__(self, channel):
+        """Constructor.
+
+        Args:
+            channel: A grpc.Channel.
+        """
+        self.SendAppendEntries = channel.unary_unary(
+                '/messaging.AppendEntries/SendAppendEntries',
+                request_serializer=messaging__pb2.SendAppendEntriesArgs.SerializeToString,
+                response_deserializer=messaging__pb2.SendAppendEntriesResponse.FromString,
+                )
+
+
+class AppendEntriesServicer(object):
+    """Missing associated documentation comment in .proto file."""
+
+    def SendAppendEntries(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+
+def add_AppendEntriesServicer_to_server(servicer, server):
+    rpc_method_handlers = {
+            'SendAppendEntries': grpc.unary_unary_rpc_method_handler(
+                    servicer.SendAppendEntries,
+                    request_deserializer=messaging__pb2.SendAppendEntriesArgs.FromString,
+                    response_serializer=messaging__pb2.SendAppendEntriesResponse.SerializeToString,
+            ),
+    }
+    generic_handler = grpc.method_handlers_generic_handler(
+            'messaging.AppendEntries', rpc_method_handlers)
+    server.add_generic_rpc_handlers((generic_handler,))
+
+
+ # This class is part of an EXPERIMENTAL API.
+class AppendEntries(object):
+    """Missing associated documentation comment in .proto file."""
+
+    @staticmethod
+    def SendAppendEntries(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(request, target, '/messaging.AppendEntries/SendAppendEntries',
+            messaging__pb2.SendAppendEntriesArgs.SerializeToString,
+            messaging__pb2.SendAppendEntriesResponse.FromString,
+            options, channel_credentials,
+            insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
+
+
+class CommitStub(object):
+    """Missing associated documentation comment in .proto file."""
+
+    def __init__(self, channel):
+        """Constructor.
+
+        Args:
+            channel: A grpc.Channel.
+        """
+        self.SendCommitUpdate = channel.unary_unary(
+                '/messaging.Commit/SendCommitUpdate',
+                request_serializer=google_dot_protobuf_dot_empty__pb2.Empty.SerializeToString,
+                response_deserializer=google_dot_protobuf_dot_empty__pb2.Empty.FromString,
+                )
+
+
+class CommitServicer(object):
+    """Missing associated documentation comment in .proto file."""
+
+    def SendCommitUpdate(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+
+def add_CommitServicer_to_server(servicer, server):
+    rpc_method_handlers = {
+            'SendCommitUpdate': grpc.unary_unary_rpc_method_handler(
+                    servicer.SendCommitUpdate,
+                    request_deserializer=google_dot_protobuf_dot_empty__pb2.Empty.FromString,
+                    response_serializer=google_dot_protobuf_dot_empty__pb2.Empty.SerializeToString,
+            ),
+    }
+    generic_handler = grpc.method_handlers_generic_handler(
+            'messaging.Commit', rpc_method_handlers)
+    server.add_generic_rpc_handlers((generic_handler,))
+
+
+ # This class is part of an EXPERIMENTAL API.
+class Commit(object):
+    """Missing associated documentation comment in .proto file."""
+
+    @staticmethod
+    def SendCommitUpdate(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(request, target, '/messaging.Commit/SendCommitUpdate',
+            google_dot_protobuf_dot_empty__pb2.Empty.SerializeToString,
+            google_dot_protobuf_dot_empty__pb2.Empty.FromString,
+            options, channel_credentials,
+            insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
+
+
+class AppendEntriesTwoStub(object):
+    """Missing associated documentation comment in .proto file."""
+
+    def __init__(self, channel):
+        """Constructor.
+
+        Args:
+            channel: A grpc.Channel.
+        """
+        self.SendAppendEntriesTwo = channel.unary_unary(
+                '/messaging.AppendEntriesTwo/SendAppendEntriesTwo',
+                request_serializer=messaging__pb2.Term.SerializeToString,
+                response_deserializer=google_dot_protobuf_dot_empty__pb2.Empty.FromString,
+                )
+
+
+class AppendEntriesTwoServicer(object):
+    """Missing associated documentation comment in .proto file."""
+
+    def SendAppendEntriesTwo(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+
+def add_AppendEntriesTwoServicer_to_server(servicer, server):
+    rpc_method_handlers = {
+            'SendAppendEntriesTwo': grpc.unary_unary_rpc_method_handler(
+                    servicer.SendAppendEntriesTwo,
+                    request_deserializer=messaging__pb2.Term.FromString,
+                    response_serializer=google_dot_protobuf_dot_empty__pb2.Empty.SerializeToString,
+            ),
+    }
+    generic_handler = grpc.method_handlers_generic_handler(
+            'messaging.AppendEntriesTwo', rpc_method_handlers)
+    server.add_generic_rpc_handlers((generic_handler,))
+
+
+ # This class is part of an EXPERIMENTAL API.
+class AppendEntriesTwo(object):
+    """Missing associated documentation comment in .proto file."""
+
+    @staticmethod
+    def SendAppendEntriesTwo(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(request, target, '/messaging.AppendEntriesTwo/SendAppendEntriesTwo',
+            messaging__pb2.Term.SerializeToString,
+            google_dot_protobuf_dot_empty__pb2.Empty.FromString,
+            options, channel_credentials,
+            insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
