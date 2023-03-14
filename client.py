@@ -96,10 +96,34 @@ class AppendEntriesServicer(messaging_pb2_grpc.AppendEntriesServicer):
             #implement log stuff later
             #while the local log's term at prevlogindex != leader/sender's log's term at prevlogindex
             #decrement 
-
-            log[request.prevLogIndex.index + 1] = receivedLog[request.prevLogIndex.index + 1]
+            if request.prevLogIndex.index != -1:
+                tempindex = request.prevLogIndex.index
+                print(request.prevLogIndex.index)
+                if tempindex >= len(log):
+                    print("should not be here in this case")
+                    tempindex = len(log) - 1
+                print("index 1")
+                while log[tempindex][0] != receivedLog[tempindex][0] and tempindex >= 0:
+                    print("should not be here, this while loop should not be executed")
+                    log = log.pop(-1)
+                    tempindex -= 1
+                if len(log) < request.prevLogIndex.index + 1:
+                    print("index 2")
+                    print("should not be here, we immediately found a match so we didn't pop anything")
+                    for i in range(tempindex+1,len(receivedLog)-1): #append everything to match up to everything from tempindex + 1 to last element in receivedLog
+                        if receivedLog[i][1] == 1: #if commited, do that action 
+                            print(receivedLog[i][2])
+                        log.append(receivedLog[i])
+            print("about to append final entry")
+            print(request.prevLogIndex.index + 1)
+            print(log)
+            log.append(receivedLog[request.prevLogIndex.index + 1])
+            print("its 121")
+            print(log)
+            print(request.prevLogIndex.index+1)
             if log[request.prevLogIndex.index + 1][1] == 1:
                 print(log)
+            print("Appended")
             response = messaging_pb2.SendAppendEntriesResponse(
                 recipientTerm=messaging_pb2.Term(term=currentTerm),
                 success=messaging_pb2.appendedEntry(success=True)
@@ -110,7 +134,7 @@ class CommitServicer(messaging_pb2_grpc.CommitServicer):
     def SendCommitUpdate(self,request,context):
         print("Committing!")
         global log
-        log[-1][2] = 1
+        log[-1][1] = 1
         print("log after commit:", log)
         return empty_pb2.Empty()
 
@@ -138,9 +162,8 @@ def sendAppendEntriesFunc():
     global clientNum,clientNumberStubs,messageStubs,requestVotesStub,numVotes,forfeit,currentTerm
 
 
-    if len(log[0]) == 0:
+    if len(log) == 0:
         prevLogTerm = -1
-        log.clear()
     else:
         print(log)
         prevLogTerm = log[len(log) - 1][0]
@@ -364,7 +387,7 @@ if __name__ == '__main__':
     forfeit = 0
     candidateElectionTimer = 1
     #term, committed, number
-    log = [[]]
+    log = []
     #log = [[index, term, committed, dictionary_id, client_numbersthathaveaccess, dictionary public key, version],]
     electionTimeout()
   
