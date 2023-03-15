@@ -9,6 +9,7 @@ from _thread import *
 import random
 from google.protobuf import empty_pb2
 import threading
+import hashlib
 
 otherClient = {} #IP/Port -> ClientNum
 
@@ -110,7 +111,7 @@ class AppendEntriesServicer(messaging_pb2_grpc.AppendEntriesServicer):
                 print("index 1")
                 while log[tempindex][0] != receivedLog[tempindex][0] and tempindex >= 0:
                     print("should not be here, this while loop should not be executed")
-                    log = log.pop(-1)
+                    log.pop(-1)
                     writeLogToFile()
                     tempindex -= 1
                 if len(log) < request.prevLogIndex.index + 1:
@@ -120,11 +121,23 @@ class AppendEntriesServicer(messaging_pb2_grpc.AppendEntriesServicer):
                         if receivedLog[i][1] == 1: #if commited, do that action 
                             print(receivedLog[i][2])
                         log.append(receivedLog[i])
+                        if len(log) == 1:
+                            log[0][-1] = hashlib.sha256(b"").hexdigest()
+                        else:
+                            temp_string_list = list(map(str,log[-2]))
+                            prevListString = ''.join(temp_string_list) 
+                            log[-1][-1] = hashlib.sha256(prevListString.encode()).hexdigest()
                         writeLogToFile()
             print("about to append final entry")
             print(request.prevLogIndex.index + 1)
             print(log)
             log.append(receivedLog[request.prevLogIndex.index + 1])
+            if len(log) == 1:
+                log[0][-1] = hashlib.sha256(b"").hexdigest()
+            else:
+                temp_string_list = list(map(str,log[-2]))
+                prevListString = ''.join(temp_string_list) 
+                log[-1][-1] = hashlib.sha256(prevListString.encode()).hexdigest()
             writeLogToFile()
             print("its 121")
             print(log)
@@ -178,7 +191,14 @@ def sendAppendEntriesFunc():
     
 
     prevLogIndex = len(log) - 1
-    log.append([currentTerm, 0, "hello"])
+    log.append([currentTerm, 0, "hello",""])
+    if len(log) == 1:
+        log[0][-1] = hashlib.sha256(b"").hexdigest()
+    else:
+        temp_string_list = list(map(str,log[-2]))
+        prevListString = ''.join(temp_string_list) 
+        log[-1][-1] = hashlib.sha256(prevListString.encode()).hexdigest()
+
     writeLogToFile()
     #append requested entry
     #maybe make special cse for when log was empty prior to appending for the first time?
@@ -392,12 +412,15 @@ def writeLogToFile():
         lines[-1] = "log: " + logString + "\n"
     with open(filename, 'w') as file:
         file.writelines(lines)
+
+
 if __name__ == '__main__':
     print("Client num:",end="")
     clientNum = input()
     start_new_thread(serve, (clientNum,))
     print("Press enter to start")
     input()
+
     channel = 0
     clientNumberStubs = []
     messageStubs = []
