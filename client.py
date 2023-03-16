@@ -265,6 +265,8 @@ def terminalInput():
         match option:
             case "create":
                 print("Selected: create")
+                
+
                 sendAppendEntriesFunc()
 
             case "put":
