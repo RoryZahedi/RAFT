@@ -180,10 +180,12 @@ class RedirectServicer(messaging_pb2_grpc.RedirectServicer):
 
 class CommitServicer(messaging_pb2_grpc.CommitServicer):
     def SendCommitUpdate(self,request,context):
+        global log
         time.sleep(3)
         print("Committing!")
         global log
         log[-1][1] = 1
+        writeLogToFile()
         print("log after commit:", log)
         return empty_pb2.Empty()
 
@@ -215,8 +217,8 @@ def sendAppendEntriesFunc(command,issuingClientNum = -1, clientIDs = [],dictID =
         prevLogTerm = -1
     else:
         # print(log)
-        prevLogTerm = log[len(log) - 1][0]
-    
+        prevLogTerm = log[len(log) - 1][0]  
+
     command = command.lower()
     prevLogIndex = len(log) - 1
 
@@ -235,8 +237,10 @@ def sendAppendEntriesFunc(command,issuingClientNum = -1, clientIDs = [],dictID =
 
     elif command == 'get':
         
-        log.append([currentTerm,0,command,"",dictID,issuingClientNum,dictKey])
-
+        # log.append([currentTerm,0,command,"",dictID,issuingClientNum,dictKey])
+        print("log before:",log)
+        log.append([currentTerm,0,command,"",dictID,issuingClientNum])
+        print("log after:",log)
         #get command log entry [currentTerm, committed, nameofCommand, hash of previous entry, 
         # dictionary_id, issuing client's client-id,  key (to get value) encrypted with dictionary public key
         
@@ -251,7 +255,7 @@ def sendAppendEntriesFunc(command,issuingClientNum = -1, clientIDs = [],dictID =
 
     else:
         print("Unrecognized command:", command)
-
+        return
     
 
     if len(log) == 1:
@@ -275,29 +279,51 @@ def sendAppendEntriesFunc(command,issuingClientNum = -1, clientIDs = [],dictID =
         commitIndex = messaging_pb2.Index(index = -1)
     )
   
-        
-    successclients = [0]*5
-    for i in range(0,5):
-        if str(i) != clientNum:
-            print("Sending request to client",i)
-            try:
-                results = AppendEntriesStubs[i].SendAppendEntries(args)                                                     
-            except grpc.RpcError as e:
-                print("Could not reach client",i)
-                continue
-            if results.success.success:
-                print("successful log update")
-                successclients[i] += 1
-                if sum(successclients) == 3:
-                    log[-1][1] = 1
-                    print(log[-1][2])
-                    for j in range(0,i):
-                        if str(j) != clientNum:
-                            print("here send commit update")
-                            nullret = CommitStubs[j].SendCommitUpdate(empty_pb2.Empty())
 
-            #         #issue commit update here
+    threads = []
+    numSucc = [0]*5
+    numSucc[int(clientNum)] = 1
+    for i in range(0,5):
+        if i != int(clientNum):
+            t = threading.Thread(target=asynchSendAppendEntries, args=(args,i,numSucc))
+            threads.append(t)
+            t.start()
+    for t in threads:
+        t.join()
+    
+    print("Num succ = ",sum(numSucc))
+    if sum(numSucc) >= 3:
+        log[-1][1] = 1
+        threads = []
+        for i in range(0,5):
+            if i != int(clientNum):
+                t = threading.Thread(target=asynchSendCommit, args=(i,))
+                threads.append(t)
+                t.start()
+        for t in threads:
+             t.join()
+        
+        writeLogToFile()
+    
             
+def asynchSendAppendEntries(args,clientNumToSendTo,numSucc):
+    global log, AppendEntriesStubs
+    print("Sending request to client",clientNumToSendTo)
+    try:
+        results = AppendEntriesStubs[clientNumToSendTo].SendAppendEntries(args)
+
+        if results.success.success:
+            numSucc[clientNumToSendTo] = 1                                                
+    except grpc.RpcError as e:
+        print("Could not reach client",clientNumToSendTo)
+      
+def asynchSendCommit(i):
+    global CommitStubs
+    try:
+        nullRet = CommitStubs[i].SendCommitUpdate(empty_pb2.Empty())
+    except grpc.RpcError as e:
+        print("Could not reach client",i)
+    return
 
 def run():
     global clientNum,clientNumberStubs,messageStubs,requestVotesStub,heartbeatStubs,AppendEntriesStubs, CommitStubs, channel,terminalStubs
@@ -373,7 +399,7 @@ def terminalInput():
                 dictID = input("Please enter: dictionary ID")
                 key = input("Please enter the dict key")
                 if state == 'leader':
-                    sendAppendEntriesFunc(command= 'Put',issuingClientNum=clientNum,dictID=dictID,dictKey=key)
+                    sendAppendEntriesFunc(command= 'Get',issuingClientNum=clientNum,dictID=dictID,dictKey=key)
                 elif state == 'follower':
                     args = messaging_pb2.TerminalArgs( 
                         commandIssued="get",
