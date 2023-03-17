@@ -135,22 +135,22 @@ class AppendEntriesServicer(messaging_pb2_grpc.AppendEntriesServicer):
                             print(receivedLog[i][2])
                         log.append(receivedLog[i])
                         if len(log) == 1:
-                            log[0][-1] = hashlib.sha256(b"").hexdigest()
+                            log[0][3] = hashlib.sha256(b"").hexdigest()
                         else:
                             temp_string_list = list(map(str,log[-2]))
                             prevListString = ''.join(temp_string_list) 
-                            log[-1][-1] = hashlib.sha256(prevListString.encode()).hexdigest()
+                            log[-1][3] = hashlib.sha256(prevListString.encode()).hexdigest()
                         writeLogToFile()
             print("about to append final entry")
             print(request.prevLogIndex.index + 1)
             print(log)
             log.append(receivedLog[request.prevLogIndex.index + 1])
             if len(log) == 1:
-                log[0][-1] = hashlib.sha256(b"").hexdigest()
+                log[0][3] = hashlib.sha256(b"").hexdigest()
             else:
                 temp_string_list = list(map(str,log[-2]))
                 prevListString = ''.join(temp_string_list) 
-                log[-1][-1] = hashlib.sha256(prevListString.encode()).hexdigest()
+                log[-1][3] = hashlib.sha256(prevListString.encode()).hexdigest()
             writeLogToFile()
             print("its 121")
             print(log)
@@ -199,25 +199,30 @@ def performComittedAction():
     # print("log = ",log)
     # print(log[-1][2])
     command = log[-1][2].lower()
-    print(log[-1][5])
-    dictionaryID = str(log[-1][5])
+    
     print("log = ",log)
-    print(dictionaryID)
     if command == 'create':
+
             #    currentTerm, committed, nameofcomamnd, hash of previous entry, clientlist, 
             # , dictionaryid, dictionary public key, list of dictionary private keys]
         print("command is create!")
+        dictionaryID = str(log[-1][5])
         clientList = log[-1][4].split()
         if str(clientNum) in clientList:
             print("CREATING \n replicatedDict now",replicatedDictionary)
             replicatedDictionary[dictionaryID] = {}
             print("After: ",replicatedDictionary)
     elif command == 'put':
+        print("Attempting to put")
+        dictionaryID = str(log[-1][4])
+        print("Dict ID = ",dictionaryID)
         if dictionaryID in replicatedDictionary:
-            # [currentTerm, committed, nameofCommand,hash of previous entry, dictionary_id, issuing client;s client-id, 
+            print("It is in here!")
+            # [currentTerm, committed, nameofCommand,hash of previous entry, dictionary_id, issuing client's client-id, 
             # key-vlalue pair encrypted with dictionary public key]
             replicatedDictionary[dictionaryID][log[-1][6]] = log[-1][7] 
     elif command == 'get':
+        dictionaryID = str(log[-1][4])
         #  currentTerm,0,command,"",dictID,issuingClientNum]
         if int(clientNum) == int(log[-1][5]):
             print("Get returned:",replicatedDictionary[log[-1][4]])  
@@ -283,6 +288,7 @@ def sendAppendEntriesFunc(command,issuingClientNum = -1, clientIDs = [],dictID =
 
 
     elif command == 'put':
+        print("Dict Value = ",dictValue)
         log.append([currentTerm,0,command,"",dictID,issuingClientNum,dictKey,dictValue])
         #TODO actually put it
         #put command log entry [currentTerm, committed, nameofCommand,hash of previous entry, dictionary_id, issuing client;s client-id, 
@@ -295,11 +301,11 @@ def sendAppendEntriesFunc(command,issuingClientNum = -1, clientIDs = [],dictID =
     
 
     if len(log) == 1:
-        log[0][-1] = hashlib.sha256(b"").hexdigest()
+        log[0][3] = hashlib.sha256(b"").hexdigest()
     else:
         temp_string_list = list(map(str,log[-2]))
         prevListString = ''.join(temp_string_list) 
-        log[-1][-1] = hashlib.sha256(prevListString.encode()).hexdigest()
+        log[-1][3] = hashlib.sha256(prevListString.encode()).hexdigest()
 
     writeLogToFile()
     #append requested entry
