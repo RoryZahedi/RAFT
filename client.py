@@ -199,7 +199,7 @@ def performComittedAction():
     # print("log = ",log)
     # print(log[-1][2])
     command = log[-1][2].lower()
-    dictionaryID = str(log[-1][5][0])+'.'+str(log[-1][5][1])
+    dictionaryID = str(log[-1][4][0])+'.'+str(log[-1][4][1])
     if command == 'create':
             #    currentTerm, committed, nameofcomamnd, hash of previous entry, clientlist, 
             # , dictionaryid, dictionary public key, list of dictionary private keys]
@@ -410,7 +410,10 @@ def terminalInput():
                 
             case "put":
                 print("Selected: put")
-                dictID = input("Please enter: dictionary ID")
+                print("Please enter DICTID")
+                PID = input("PID:")
+                dIDCounter = input("Counter:")
+                dictID = PID + "." + dIDCounter
                 key = input("Please enter the dict key")
                 value = input("Enter the value you wish to place")
                 if state == 'leader':
