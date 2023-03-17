@@ -10,6 +10,13 @@ import random
 from google.protobuf import empty_pb2
 import threading
 import hashlib
+from cryptography.hazmat.primitives import serialization, hashes
+from cryptography.hazmat.primitives.asymmetric import rsa, padding
+from cryptography.hazmat.primitives.serialization import load_pem_private_key
+from cryptography.hazmat.primitives.serialization import load_pem_public_key
+from cryptography.hazmat.backends import default_backend
+from Crypto.Cipher import AES
+from Crypto.Random import get_random_bytes
 
 otherClient = {} #IP/Port -> ClientNum
 
@@ -58,13 +65,13 @@ class RequestVoteServicer(messaging_pb2_grpc.RequestVoteServicer):
                 state = "follower"
                 print("Forfeiting election for term",currentTerm)
                 electionTimer = random.randint(20, 30)
-        if currentTerm == receivedTerm and (votedFor == -1 or votedFor == otherClientNumber) and clientNum > otherClientNumber:#TODO: hardcoded
+        if currentTerm == receivedTerm and (votedFor == -1 or int(votedFor) == int(otherClientNumber)) and int(clientNum) > int(otherClientNumber):#TODO: hardcoded
             if state != "follower":
                 forfeit = 1
                 state = "follower"
                 print("Forfeiting election for term",currentTerm)
                 electionTimer = random.randint(20, 30)
-            votedFor = otherClientNumber
+            votedFor = int(otherClientNumber)
             writeVotedForToFile()
             voteGranted = True
             electionTimer = random.randint(20, 30)
@@ -154,12 +161,21 @@ class AppendEntriesServicer(messaging_pb2_grpc.AppendEntriesServicer):
     
 class RedirectServicer(messaging_pb2_grpc.RedirectServicer):
     def SendTerminalCommandRedirect(self,request,context):
+        print("Entered!!")
         peer_ip = context.peer().split(":")[-1]
         otherClientNumber = otherClient[peer_ip]
         print("Received", request.commandIssued, "from", str(otherClientNumber))
-        sendAppendEntriesFunc(command = request.commandIssued, issuingClientNum=otherClientNumber, 
-                              clientIDs=request.clientIDs,dictID=request.ID,dictKey=request.dictKey,
+        print(request.commandIssued)
+        print(int(otherClientNumber))
+        print(request.clientIDs)
+        print(request.clientIDs)
+        print(request.dictID)
+
+        sendAppendEntriesFunc(command = request.commandIssued, issuingClientNum=int(otherClientNumber), 
+                              clientIDs=request.clientIDs,dictID=request.dictID,dictKey=request.dictKey,
                               dictValue=request.dictValue)
+        print("did i make it?")
+        return empty_pb2.Empty()
 
 
 class CommitServicer(messaging_pb2_grpc.CommitServicer):
@@ -208,18 +224,21 @@ def sendAppendEntriesFunc(command,issuingClientNum = -1, clientIDs = [],dictID =
 
         dictID = str((currentTerm,counter))
         counter += 1
-        log.append([currentTerm,0,command,"",clientIDs,dictID,-1,[]]) #Still not finished; TODO : create actual dict, dictionary public key, list of dictionary private keys
+        private_key = rsa.generate_private_key(public_exponent=65537,key_size=2048,)
+        public_key = private_key.public_key()
+        private_keyList = len(clientIDs)*[private_key]
+        # print("priv_keyList:",private_keyList)
+        
+        log.append([currentTerm,0,command,"",clientIDs,dictID, public_key, private_keyList]) #Still not finished; TODO : create actual dict, dictionary public key, list of dictionary private keys
         #currentTerm, committed, nameofcomamnd, hash of previous entry, clientlist, 
     # , dictionaryid, dictionary public key, list of dictionary private keys]
 
     elif command == 'get':
         
         log.append([currentTerm,0,command,"",dictID,issuingClientNum,dictKey])
-        #TODO Index into the dictionary
-        #TODO send the retreived value using RPC
 
         #get command log entry [currentTerm, committed, nameofCommand, hash of previous entry, 
-        # dictionary_id, issuing client;s client-id,  key (to get value) encrypted with dictionary public key
+        # dictionary_id, issuing client's client-id,  key (to get value) encrypted with dictionary public key
         
 
 
@@ -293,7 +312,7 @@ def run():
             heartbeatStubs.append(messaging_pb2_grpc.HeartbeatStub(channel))
             AppendEntriesStubs.append(messaging_pb2_grpc.AppendEntriesStub(channel))
             CommitStubs.append(messaging_pb2_grpc.CommitStub(channel))
-            terminalStubs.append(messaging_pb2_grpc.CommitStub(channel))
+            terminalStubs.append(messaging_pb2_grpc.RedirectStub(channel))
         else:
             clientNumberStubs.append(-1)
             messageStubs.append(-1)
@@ -328,6 +347,7 @@ def terminalInput():
                         dictKey = "",
                         dictValue = "" 
                     )
+                    print("Voted for = ",votedFor)
                     terminalStubs[int(votedFor)].SendTerminalCommandRedirect(args) 
                 
             case "put":
@@ -413,7 +433,7 @@ def sendElectionRequests():
 def election():
     #add variable here
     global clientNum, votedFor,numVotes,forfeit, electionTimer,state,currentTerm,candidateElectionTimer
-    votedFor = clientNum
+    votedFor = int(clientNum)
     writeVotedForToFile()
     numVotes = 1
     forfeit = 0
@@ -430,7 +450,6 @@ def election():
         state = 'follower'
         forfeit = 0
         electionTimer = random.randint(20, 30)
-        print('in the forfeit branch with election timer = ',electionTimer)
         return
     elif candidateElectionTimer == 0:
         return
@@ -473,7 +492,8 @@ def electionTimeout():
                 heartbeatTimer-=1
             #send heartbeats to all other clients
             sendHeartBeats()
-            heartbeatTimer = random.randint(10,15)
+            # heartbeatTimer = random.randint(10,15)
+            heartbeatTimer = 2 #TODO REMOVE THIS
             print("Heartbeat timeout!")
             
 def sendHeartBeats():
@@ -511,14 +531,67 @@ def writeLogToFile():
     with open(filename, 'w') as file:
         file.writelines(lines)
 
+def loadKeysAtStart(clientNum):
+    filename = "public-keyX.pub"
+    pubKeyDict = {}
+
+
+    filenumberIndex = filename.find('X')
+
+    for i in range(0,5):
+        fName = filename
+        fName = fName.replace('X',str(i))
+        with open(fName, 'rb') as file:
+            pemlines = file.read()
+        public_key = load_pem_public_key(pemlines)
+        pubKeyDict[i] = public_key
+        
+    ciphertexts = []
+    #Test
+    for pubKey in pubKeyDict.values():
+        Message = "PLEASE WORK".encode()
+        ciphertext = pubKey.encrypt(
+        Message,
+        padding.OAEP(
+            mgf=padding.MGF1(algorithm=hashes.SHA256()),
+            algorithm=hashes.SHA256(),
+            label=None
+        )
+        )
+        ciphertexts.append(ciphertext)
+
+
+    filename = "private-keyX.pem"
+
+    fName = 'private-key' + str(clientNum) + '.pem'
+    with open(fName, 'rb') as file:
+        pemlines = file.read()
+    privateKey = load_pem_private_key(pemlines, None, default_backend())
+
+    plaintext = privateKey.decrypt(
+        ciphertexts[int(clientNum)],
+        padding.OAEP(
+            mgf=padding.MGF1(algorithm=hashes.SHA256()),
+            algorithm=hashes.SHA256(),
+            label=None
+        )
+    )
+
+    hashkey = []
+    for i in range(5):
+        val = get_random_bytes(16)
+        hashkey.append(AES.new(val, AES.MODE_EAX))
+
+    return pubKeyDict, privateKey, hashkey
 
 if __name__ == '__main__':
     print("Client num:",end="")
     clientNum = input()
+    pubKeyDict, privateKey, hashkey = loadKeysAtStart(clientNum)
     start_new_thread(serve, (clientNum,))
     print("Press enter to start")
     input()
-    
+
     channel = 0
     counter = 0
     getValue = None
