@@ -38,9 +38,11 @@ class ClientNumberServicer(messaging_pb2_grpc.ClientNumberServicer):
     
 class HeartbeatServicer(messaging_pb2_grpc.HeartbeatServicer):
     def SendHeartbeat(self, request, context):
-        global electionTimer
+        global electionTimer, votedFor
         peer_ip = context.peer().split(":")[-1]
         otherClient[peer_ip] = request.message
+    
+      
         print(f"Received heartbeet: from {otherClient[peer_ip]}")
         electionTimer = random.randint(20,30)
         print()
@@ -93,8 +95,8 @@ class AppendEntriesServicer(messaging_pb2_grpc.AppendEntriesServicer):
         peer_ip = context.peer().split(":")[-1]
         print("RECEIVED APPEND")
         otherClientNumber = otherClient[peer_ip] #PID of other client
-        print("log string received",request.entries)
-        
+        # print("log string received",request.entries)
+       
         receivedLog = [[eval(item) if item.isdigit() else item.strip("\"") for item in inner.split(",")] for inner in request.entries.message.split(";")]
         print(receivedLog)
 
@@ -119,17 +121,12 @@ class AppendEntriesServicer(messaging_pb2_grpc.AppendEntriesServicer):
                 tempindex = request.prevLogIndex.index
                 print(request.prevLogIndex.index)
                 if tempindex >= len(log):
-                    print("should not be here in this case")
                     tempindex = len(log) - 1
-                print("index 1")
                 while log[tempindex][0] != receivedLog[tempindex][0] and tempindex >= 0:
-                    print("should not be here, this while loop should not be executed")
                     log.pop(-1)
                     writeLogToFile()
                     tempindex -= 1
                 if len(log) < request.prevLogIndex.index + 1:
-                    print("index 2")
-                    print("should not be here, we immediately found a match so we didn't pop anything")
                     for i in range(tempindex+1,len(receivedLog)-1): #append everything to match up to everything from tempindex + 1 to last element in receivedLog
                         if receivedLog[i][1] == 1: #if commited, do that action 
                             print(receivedLog[i][2])
@@ -141,9 +138,6 @@ class AppendEntriesServicer(messaging_pb2_grpc.AppendEntriesServicer):
                             prevListString = ''.join(temp_string_list) 
                             log[-1][3] = hashlib.sha256(prevListString.encode()).hexdigest()
                         writeLogToFile()
-            print("about to append final entry")
-            print(request.prevLogIndex.index + 1)
-            print(log)
             log.append(receivedLog[request.prevLogIndex.index + 1])
             if len(log) == 1:
                 log[0][3] = hashlib.sha256(b"").hexdigest()
@@ -152,12 +146,7 @@ class AppendEntriesServicer(messaging_pb2_grpc.AppendEntriesServicer):
                 prevListString = ''.join(temp_string_list) 
                 log[-1][3] = hashlib.sha256(prevListString.encode()).hexdigest()
             writeLogToFile()
-            print("its 121")
-            print(log)
-            print(request.prevLogIndex.index+1)
-            if log[request.prevLogIndex.index + 1][1] == 1:
-                print(log)
-            print("Appended")
+
             response = messaging_pb2.SendAppendEntriesResponse(
                 recipientTerm=messaging_pb2.Term(term=currentTerm),
                 success=messaging_pb2.appendedEntry(success=True)
@@ -179,7 +168,7 @@ class RedirectServicer(messaging_pb2_grpc.RedirectServicer):
         sendAppendEntriesFunc(command = request.commandIssued, issuingClientNum=int(otherClientNumber), 
                               clientIDs=request.clientIDs,dictID=request.dictID,dictKey=request.dictKey,
                               dictValue=request.dictValue)
-        print("did i make it?")
+        
         return empty_pb2.Empty()
 
 
@@ -207,17 +196,13 @@ def performComittedAction():
             # , dictionaryid, dictionary public key, list of dictionary private keys]
         print("command is create!")
         dictionaryID = str(log[-1][5])
+        print
         clientList = log[-1][4].split()
         if str(clientNum) in clientList:
-            print("CREATING \n replicatedDict now",replicatedDictionary)
             replicatedDictionary[dictionaryID] = {}
-            print("After: ",replicatedDictionary)
     elif command == 'put':
-        print("Attempting to put")
         dictionaryID = str(log[-1][4])
-        print("Dict ID = ",dictionaryID)
         if dictionaryID in replicatedDictionary:
-            print("It is in here!")
             # [currentTerm, committed, nameofCommand,hash of previous entry, dictionary_id, issuing client's client-id, 
             # key-vlalue pair encrypted with dictionary public key]
             replicatedDictionary[dictionaryID][log[-1][6]] = log[-1][7] 
@@ -271,7 +256,14 @@ def sendAppendEntriesFunc(command,issuingClientNum = -1, clientIDs = [],dictID =
         public_key = private_key.public_key()
         private_keyList = len(clientIDs)*[private_key]
         # print("priv_keyList:",private_keyList)
-        
+        print(type(clientIDs),print(type(clientIDs) == type(list)))
+        s = ''
+        if type(clientIDs) != type(str):
+            for i in clientIDs:
+                s += i
+            clientIDs = s
+        print("Client IDs = ",clientIDs)
+
         log.append([currentTerm,0,command,"",clientIDs,dictID, public_key, private_keyList]) #Still not finished; TODO : create actual dict, dictionary public key, list of dictionary private keys
         #currentTerm, committed, nameofcomamnd, hash of previous entry, clientlist, 
     # , dictionaryid, dictionary public key, list of dictionary private keys]
@@ -279,9 +271,7 @@ def sendAppendEntriesFunc(command,issuingClientNum = -1, clientIDs = [],dictID =
     elif command == 'get':
         
         # log.append([currentTerm,0,command,"",dictID,issuingClientNum,dictKey])
-        print("log before:",log)
         log.append([currentTerm,0,command,"",dictID,issuingClientNum])
-        print("log after:",log)
         #get command log entry [currentTerm, committed, nameofCommand, hash of previous entry, 
         # dictionary_id, issuing client's client-id,  key (to get value) encrypted with dictionary public key
         
@@ -333,7 +323,6 @@ def sendAppendEntriesFunc(command,issuingClientNum = -1, clientIDs = [],dictID =
     for t in threads:
         t.join()
     
-    print("Num succ = ",sum(numSucc))
     if sum(numSucc) >= 3:
         log[-1][1] = 1
 
