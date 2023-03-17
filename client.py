@@ -51,9 +51,13 @@ class HeartbeatServicer(messaging_pb2_grpc.HeartbeatServicer):
 class RequestVoteServicer(messaging_pb2_grpc.RequestVoteServicer):
     def SendVoteRequest(self,request,context):
         global currentTerm, votedFor, electionTimer,forfeit,state
+        global failedLinks
         time.sleep(3)
         peer_ip = context.peer().split(":")[-1]
         otherClientNumber = otherClient[peer_ip]
+        if failedLinks[int(otherClientNumber)] == 1:
+            status_code = grpc.StatusCode.INVALID_ARGUMENT
+            context.abort_with_status(grpc.StatusCode.INVALID_ARGUMENT, "")
         receivedTerm = request.term 
         print(f"Received vote request from {otherClientNumber} with term {receivedTerm}")
         voteGranted = False
@@ -662,6 +666,7 @@ if __name__ == '__main__':
     print("Client num:",end="")
     clientNum = input()
     pubKeyDict, privateKey, hashkey = loadKeysAtStart(clientNum)
+    failedLinks = [0]*5
     start_new_thread(serve, (clientNum,))
     print("Press enter to start")
     input()
