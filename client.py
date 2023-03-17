@@ -72,6 +72,7 @@ class RequestVoteServicer(messaging_pb2_grpc.RequestVoteServicer):
                 print("Forfeiting election for term",currentTerm)
                 electionTimer = random.randint(20, 30)
             votedFor = int(otherClientNumber)
+            print("Voted for:",votedFor)
             writeVotedForToFile()
             voteGranted = True
             electionTimer = random.randint(20, 30)
@@ -434,26 +435,23 @@ def terminalInput():
 
 
         
-def sendElectionRequests():
+def sendElectionRequests(i):
     global clientNum,clientNumberStubs,messageStubs,requestVotesStub,numVotes,forfeit,currentTerm
-    for i in range(0,5):
-        if str(i) != clientNum:
-            print("Sending request to client",i)
-            try:
-                results = requestVotesStub[i].SendVoteRequest(messaging_pb2.Term(term=currentTerm))
-            except grpc.RpcError as e:
-                print("Could not reach client",i)
-                continue
-            receivedTerm = results.term.term #requested client's updated term
-            if receivedTerm > currentTerm:
-                currentTerm = receivedTerm
-                writeTermToFile()
-                forfeit = 1
-            voteGranted = results.vg.vote #whether requested client gives vote to us or not
-            print(voteGranted)
-            if voteGranted:
-                numVotes+=1
-
+    print("Sending request to client",i)
+    try:
+        results = requestVotesStub[i].SendVoteRequest(messaging_pb2.Term(term=currentTerm))
+        receivedTerm = results.term.term #requested client's updated term
+        voteGranted = results.vg.vote #whether requested client gives vote to us or not
+        print(voteGranted)
+        if receivedTerm > currentTerm:
+            currentTerm = receivedTerm
+            writeTermToFile()
+            forfeit = 1     
+        if voteGranted:
+            numVotes[i] = 1
+    except grpc.RpcError as e:
+        print("Could not reach client",i)
+            
 
 
 def election():
@@ -461,14 +459,20 @@ def election():
     global clientNum, votedFor,numVotes,forfeit, electionTimer,state,currentTerm,candidateElectionTimer
     votedFor = int(clientNum)
     writeVotedForToFile()
-    numVotes = 1
+    numVotes = [0]*5 
     forfeit = 0
-    start_new_thread(sendElectionRequests, ())
+
+    for i in range(0,5):
+        if i != int(clientNum):
+            t = threading.Thread(target=sendElectionRequests, args=(i,))
+            t.start()
+
     #either the election has timed out, i have received enough votes, or i have forfeited the election
-    while numVotes < 3 and forfeit != 1 and candidateElectionTimer > 0:
+    while sum(numVotes) < 3 and forfeit != 1 and candidateElectionTimer > 0:
         time.sleep(.1)
     
-    if numVotes >= 3:
+
+    if sum(numVotes) >= 3:
         state = 'leader'
         print('I am the leader')
         return
@@ -517,20 +521,28 @@ def electionTimeout():
                 time.sleep(1)
                 heartbeatTimer-=1
             #send heartbeats to all other clients
-            sendHeartBeats()
+
+            threads = []
+            for i in range(0,5):
+                if i != int(clientNum):
+                    t = threading.Thread(target=sendHeartBeats, args=(i,))
+                    threads.append(t)
+                    t.start()
+            for t in threads:
+                t.join()
+    
+
             # heartbeatTimer = random.randint(10,15)
-            heartbeatTimer = 2 #TODO REMOVE THIS
+            heartbeatTimer = 5 #TODO REMOVE THIS
             print("Heartbeat timeout!")
             
-def sendHeartBeats():
+def sendHeartBeats(i):
     global heartbeatStubs
-    for i in range(0,5):
-        if str(i) != str(clientNum):
-            print("Sending heartbeat to client",i)
-            try:
-                nullret = heartbeatStubs[i].SendHeartbeat(messaging_pb2.Request(message=str(clientNum)))
-            except grpc.RpcError as e:
-                print("Could not send heartbeat to clinet",i)
+    try:
+        nullret = heartbeatStubs[i].SendHeartbeat(messaging_pb2.Request(message=str(clientNum)))
+    except grpc.RpcError as e:
+        print("Could not send heartbeat to client",i)
+    return
                 
 
 
@@ -651,7 +663,7 @@ if __name__ == '__main__':
     electionTimer = random.randint(20,30)
     votedFor = -1
     writeVotedForToFile()
-    numVotes = 0
+    numVotes = [0]*5
     forfeit = 0
     candidateElectionTimer = 1
     #term, committed, number

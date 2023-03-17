@@ -20,6 +20,6 @@ DN2NDA1Lyn8WxjG+/7Oizq7kYUZo6YUwwi8L0dJRPWl54leZr3Pab/sCAwEAAQ==
 
 MFswDQYJKoZIhvcNAQEBBQADSgAwRwJAZXMXYsHAA+hV6SXDqJ86zrDoeZd+xPW4
 
-CurrentTerm: 5
-VotedFor: 0
-log: 5,1,create,,[0, 1, 2],(5, 0),<cryptography.hazmat.backends.openssl.rsa._RSAPublicKey object at 0x106437350>,e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855;5,1,create,,[0, 3],(5, 1),<cryptography.hazmat.backends.openssl.rsa._RSAPublicKey object at 0x106437b50>,3413969ab5cfbe4d343e140708ca9bb279a3e4a9bb630a73464df55885cd9c31
+CurrentTerm: 2
+VotedFor: 1
+log: 
