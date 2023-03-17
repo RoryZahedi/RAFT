@@ -372,7 +372,7 @@ class Commit(object):
             insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
 
 
-class AppendEntriesTwoStub(object):
+class RedirectStub(object):
     """Missing associated documentation comment in .proto file."""
 
     def __init__(self, channel):
@@ -381,42 +381,42 @@ class AppendEntriesTwoStub(object):
         Args:
             channel: A grpc.Channel.
         """
-        self.SendAppendEntriesTwo = channel.unary_unary(
-                '/messaging.AppendEntriesTwo/SendAppendEntriesTwo',
-                request_serializer=messaging__pb2.Term.SerializeToString,
+        self.SendTerminalCommandRedirect = channel.unary_unary(
+                '/messaging.Redirect/SendTerminalCommandRedirect',
+                request_serializer=messaging__pb2.TerminalArgs.SerializeToString,
                 response_deserializer=google_dot_protobuf_dot_empty__pb2.Empty.FromString,
                 )
 
 
-class AppendEntriesTwoServicer(object):
+class RedirectServicer(object):
     """Missing associated documentation comment in .proto file."""
 
-    def SendAppendEntriesTwo(self, request, context):
+    def SendTerminalCommandRedirect(self, request, context):
         """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
 
-def add_AppendEntriesTwoServicer_to_server(servicer, server):
+def add_RedirectServicer_to_server(servicer, server):
     rpc_method_handlers = {
-            'SendAppendEntriesTwo': grpc.unary_unary_rpc_method_handler(
-                    servicer.SendAppendEntriesTwo,
-                    request_deserializer=messaging__pb2.Term.FromString,
+            'SendTerminalCommandRedirect': grpc.unary_unary_rpc_method_handler(
+                    servicer.SendTerminalCommandRedirect,
+                    request_deserializer=messaging__pb2.TerminalArgs.FromString,
                     response_serializer=google_dot_protobuf_dot_empty__pb2.Empty.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
-            'messaging.AppendEntriesTwo', rpc_method_handlers)
+            'messaging.Redirect', rpc_method_handlers)
     server.add_generic_rpc_handlers((generic_handler,))
 
 
  # This class is part of an EXPERIMENTAL API.
-class AppendEntriesTwo(object):
+class Redirect(object):
     """Missing associated documentation comment in .proto file."""
 
     @staticmethod
-    def SendAppendEntriesTwo(request,
+    def SendTerminalCommandRedirect(request,
             target,
             options=(),
             channel_credentials=None,
@@ -426,8 +426,8 @@ class AppendEntriesTwo(object):
             wait_for_ready=None,
             timeout=None,
             metadata=None):
-        return grpc.experimental.unary_unary(request, target, '/messaging.AppendEntriesTwo/SendAppendEntriesTwo',
-            messaging__pb2.Term.SerializeToString,
+        return grpc.experimental.unary_unary(request, target, '/messaging.Redirect/SendTerminalCommandRedirect',
+            messaging__pb2.TerminalArgs.SerializeToString,
             google_dot_protobuf_dot_empty__pb2.Empty.FromString,
             options, channel_credentials,
             insecure, call_credentials, compression, wait_for_ready, timeout, metadata)

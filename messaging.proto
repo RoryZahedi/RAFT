@@ -52,6 +52,14 @@ message SendAppendEntriesArgsTwo{
     Term term = 1;
 }
 
+message TerminalArgs{
+    string commandIssued = 1;
+    repeated int32 clientIDs = 2;
+    string dictID = 3;
+    string dictKey = 4;
+    string dictValue = 5;
+}
+
 service Messaging {
     rpc SendMessage(Request) returns (Response) {}
 }
@@ -76,4 +84,7 @@ service Commit{
     rpc SendCommitUpdate(google.protobuf.Empty) returns (google.protobuf.Empty) {}
 }
 
+service Redirect{
+    rpc SendTerminalCommandRedirect(TerminalArgs) returns (google.protobuf.Empty) {}
+}
 

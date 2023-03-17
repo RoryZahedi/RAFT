@@ -77,6 +77,7 @@ class RequestVoteServicer(messaging_pb2_grpc.RequestVoteServicer):
 class AppendEntriesServicer(messaging_pb2_grpc.AppendEntriesServicer):
     def SendAppendEntries(self,request,context):
         global currentTerm,state,forfeit, electionTimer, log
+        time.sleep(3)
         peer_ip = context.peer().split(":")[-1]
         print("RECEIVED APPEND")
         otherClientNumber = otherClient[peer_ip] #PID of other client
@@ -151,8 +152,19 @@ class AppendEntriesServicer(messaging_pb2_grpc.AppendEntriesServicer):
             )
         return response
     
+class RedirectServicer(messaging_pb2_grpc.RedirectServicer):
+    def SendTerminalCommandRedirect(self,request,context):
+        peer_ip = context.peer().split(":")[-1]
+        otherClientNumber = otherClient[peer_ip]
+        print("Received", request.commandIssued, "from", str(otherClientNumber))
+        sendAppendEntriesFunc(command = request.commandIssued, issuingClientNum=otherClientNumber, 
+                              clientIDs=request.clientIDs,dictID=request.ID,dictKey=request.dictKey,
+                              dictValue=request.dictValue)
+
+
 class CommitServicer(messaging_pb2_grpc.CommitServicer):
     def SendCommitUpdate(self,request,context):
+        time.sleep(3)
         print("Committing!")
         global log
         log[-1][1] = 1
@@ -168,6 +180,7 @@ def serve(clientNum):
     messaging_pb2_grpc.add_HeartbeatServicer_to_server(HeartbeatServicer(),server)
     messaging_pb2_grpc.add_AppendEntriesServicer_to_server(AppendEntriesServicer(),server)
     messaging_pb2_grpc.add_CommitServicer_to_server(CommitServicer(),server)
+    messaging_pb2_grpc.add_RedirectServicer_to_server(RedirectServicer(),server)
     port = '[::]:5005' + clientNum
     server.add_insecure_port(port)
     server.start()
@@ -178,20 +191,50 @@ def serve(clientNum):
     except KeyboardInterrupt:
         server.stop(0)
 
-def sendAppendEntriesFunc():
+def sendAppendEntriesFunc(command,issuingClientNum = -1, clientIDs = [],dictID = "", dictKey = "", dictValue = ""):
     global currentTerm,clientNum,log,state,AppendEntriesStubs,CommitStubs, channel, AppendEntriesStubsTwo
-    global clientNum,clientNumberStubs,messageStubs,requestVotesStub,numVotes,forfeit,currentTerm
-
+    global clientNum,clientNumberStubs,messageStubs,requestVotesStub,numVotes,forfeit,currentTerm,counter
 
     if len(log) == 0:
         prevLogTerm = -1
     else:
-        print(log)
+        # print(log)
         prevLogTerm = log[len(log) - 1][0]
     
-
+    command = command.lower()
     prevLogIndex = len(log) - 1
-    log.append([currentTerm, 0, "hello",""])
+
+    if command == 'create':
+
+        dictID = str((currentTerm,counter))
+        counter += 1
+        log.append([currentTerm,0,command,"",clientIDs,dictID,-1,[]]) #Still not finished; TODO : create actual dict, dictionary public key, list of dictionary private keys
+        #currentTerm, committed, nameofcomamnd, hash of previous entry, clientlist, 
+    # , dictionaryid, dictionary public key, list of dictionary private keys]
+
+    elif command == 'get':
+        
+        log.append([currentTerm,0,command,"",dictID,issuingClientNum,dictKey])
+        #TODO Index into the dictionary
+        #TODO send the retreived value using RPC
+
+        #get command log entry [currentTerm, committed, nameofCommand, hash of previous entry, 
+        # dictionary_id, issuing client;s client-id,  key (to get value) encrypted with dictionary public key
+        
+
+
+    elif command == 'put':
+        log.append([currentTerm,0,command,"",dictID,issuingClientNum,dictKey,dictValue])
+        #TODO actually put it
+        #put command log entry [currentTerm, committed, nameofCommand,hash of previous entry, dictionary_id, issuing client;s client-id, 
+        # key-vlalue pair encrypted with dictionary public key]
+
+
+    else:
+        print("Unrecognized command:", command)
+
+    
+
     if len(log) == 1:
         log[0][-1] = hashlib.sha256(b"").hexdigest()
     else:
@@ -218,7 +261,11 @@ def sendAppendEntriesFunc():
     for i in range(0,5):
         if str(i) != clientNum:
             print("Sending request to client",i)
-            results = AppendEntriesStubs[i].SendAppendEntries(args)                                                     
+            try:
+                results = AppendEntriesStubs[i].SendAppendEntries(args)                                                     
+            except grpc.RpcError as e:
+                print("Could not reach client",i)
+                continue
             if results.success.success:
                 print("successful log update")
                 successclients[i] += 1
@@ -234,7 +281,7 @@ def sendAppendEntriesFunc():
             
 
 def run():
-    global clientNum,clientNumberStubs,messageStubs,requestVotesStub,heartbeatStubs,AppendEntriesStubs, CommitStubs, channel
+    global clientNum,clientNumberStubs,messageStubs,requestVotesStub,heartbeatStubs,AppendEntriesStubs, CommitStubs, channel,terminalStubs
     
     for i in range(0,5): #Initalize clientNumberStubs with clientNumberStubs to send clientNumbers
         if str(i) != clientNum: 
@@ -246,6 +293,7 @@ def run():
             heartbeatStubs.append(messaging_pb2_grpc.HeartbeatStub(channel))
             AppendEntriesStubs.append(messaging_pb2_grpc.AppendEntriesStub(channel))
             CommitStubs.append(messaging_pb2_grpc.CommitStub(channel))
+            terminalStubs.append(messaging_pb2_grpc.CommitStub(channel))
         else:
             clientNumberStubs.append(-1)
             messageStubs.append(-1)
@@ -253,6 +301,7 @@ def run():
             AppendEntriesStubs.append(-1)
             heartbeatStubs.append(-1)
             CommitStubs.append(-1)
+            terminalStubs.append(-1)
     for i in range(0,5): #Send initial message
         if str(i) != clientNum:
             message = str(clientNum)
@@ -260,21 +309,60 @@ def run():
 
 
 def terminalInput():
+    global clientNum,state,votedFor,terminalStubs,getValue
     while True: #terminal input
         option = input()
         match option:
             case "create":
                 print("Selected: create")
+                print("Please enter list of clients seperated by space.",end='')
+                members = input().split(' ')
+                clientIDList = [int(str(x)) for x in members]
+                if state == 'leader':
+                    sendAppendEntriesFunc(command='Create',issuingClientNum=clientNum,clientIDs = clientIDList)
+                elif state == 'follower': #redirect it
+                    args = messaging_pb2.TerminalArgs( 
+                        commandIssued="create",
+                        clientIDs=clientIDList,
+                        dictID = "",
+                        dictKey = "",
+                        dictValue = "" 
+                    )
+                    terminalStubs[int(votedFor)].SendTerminalCommandRedirect(args) 
                 
-
-                sendAppendEntriesFunc()
-
             case "put":
                 print("Selected: put")
-
+                dictID = input("Please enter: dictionary ID")
+                key = input("Please enter the dict key")
+                value = input("Enter the value you wish to place")
+                if state == 'leader':
+                    sendAppendEntriesFunc(command= 'Put',issuingClientNum=clientNum,dictID=dictID,dictKey=key,dictValue=value)
+                    # def sendAppendEntriesFunc(command,issuingClientNum = -1, clientIDs = [],dictID = "", dictKey = "", dictValue = ""):
+                elif state == 'follower': #redirect it
+                    args = messaging_pb2.TerminalArgs( 
+                        commandIssued="put",
+                        clientIDs=[],
+                        dictID = dictID,
+                        dictKey = key,
+                        dictValue = value
+                    )
+                    terminalStubs[int(votedFor)].SendTerminalCommandRedirect(args) 
+                
             case "get":
                 print("Selected: get")
-
+                dictID = input("Please enter: dictionary ID")
+                key = input("Please enter the dict key")
+                if state == 'leader':
+                    sendAppendEntriesFunc(command= 'Put',issuingClientNum=clientNum,dictID=dictID,dictKey=key)
+                elif state == 'follower':
+                    args = messaging_pb2.TerminalArgs( 
+                        commandIssued="get",
+                        clientIDs=[],
+                        dictID = dictID,
+                        dictKey = key,
+                        dictValue = ""
+                    )
+                    terminalStubs[int(votedFor)].SendTerminalCommandRedirect(args) 
             case "printDict":
                 print("Selected: printDict")
             
@@ -305,7 +393,11 @@ def sendElectionRequests():
     for i in range(0,5):
         if str(i) != clientNum:
             print("Sending request to client",i)
-            results = requestVotesStub[i].SendVoteRequest(messaging_pb2.Term(term=currentTerm))
+            try:
+                results = requestVotesStub[i].SendVoteRequest(messaging_pb2.Term(term=currentTerm))
+            except grpc.RpcError as e:
+                print("Could not reach client",i)
+                continue
             receivedTerm = results.term.term #requested client's updated term
             if receivedTerm > currentTerm:
                 currentTerm = receivedTerm
@@ -389,7 +481,11 @@ def sendHeartBeats():
     for i in range(0,5):
         if str(i) != str(clientNum):
             print("Sending heartbeat to client",i)
-            nullret = heartbeatStubs[i].SendHeartbeat(messaging_pb2.Request(message=str(clientNum)))
+            try:
+                nullret = heartbeatStubs[i].SendHeartbeat(messaging_pb2.Request(message=str(clientNum)))
+            except grpc.RpcError as e:
+                print("Could not send heartbeat to clinet",i)
+                
 
 
 def writeTermToFile():
@@ -422,14 +518,17 @@ if __name__ == '__main__':
     start_new_thread(serve, (clientNum,))
     print("Press enter to start")
     input()
-
+    
     channel = 0
+    counter = 0
+    getValue = None
     clientNumberStubs = []
     messageStubs = []
     requestVotesStub = []
     heartbeatStubs = []
     AppendEntriesStubs = []
     CommitStubs = []
+    terminalStubs = []
     run()
     
     start_new_thread(terminalInput,())
