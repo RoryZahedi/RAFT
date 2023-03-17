@@ -39,8 +39,12 @@ class ClientNumberServicer(messaging_pb2_grpc.ClientNumberServicer):
 class HeartbeatServicer(messaging_pb2_grpc.HeartbeatServicer):
     def SendHeartbeat(self, request, context):
         global electionTimer, votedFor
+        global failedLinks
         peer_ip = context.peer().split(":")[-1]
-        otherClient[peer_ip] = request.message
+        otherClientNumber = otherClient[peer_ip]
+        if failedLinks[int(otherClientNumber)] == 1:
+            status_code = grpc.StatusCode.INVALID_ARGUMENT
+            context.abort_with_status(grpc.StatusCode.INVALID_ARGUMENT, "")
     
       
         print(f"Received heartbeet: from {otherClient[peer_ip]}")
@@ -366,7 +370,8 @@ def asynchSendAppendEntries(args,clientNumToSendTo,numSucc):
     global log, AppendEntriesStubs
     print("Sending request to client",clientNumToSendTo)
     try:
-        results = AppendEntriesStubs[clientNumToSendTo].SendAppendEntries(args)
+        if failedLinks[int(clientNumToSendTo)] != 1:
+            results = AppendEntriesStubs[clientNumToSendTo].SendAppendEntries(args)
 
         if results.success.success:
             numSucc[clientNumToSendTo] = 1                                                
@@ -375,15 +380,17 @@ def asynchSendAppendEntries(args,clientNumToSendTo,numSucc):
       
 def asynchSendCommit(i):
     global CommitStubs
+    global failedLinks
     try:
-        nullRet = CommitStubs[i].SendCommitUpdate(empty_pb2.Empty())
+        if failedLinks[int(i)] != 1:
+            nullRet = CommitStubs[i].SendCommitUpdate(empty_pb2.Empty())
     except grpc.RpcError as e:
-        print("Could not reach client for commit",e)
+        print("Could not reach client for commit",i)
     return
 
 def run():
     global clientNum,clientNumberStubs,messageStubs,requestVotesStub,heartbeatStubs,AppendEntriesStubs, CommitStubs, channel,terminalStubs
-    
+    global failedLinks
     for i in range(0,5): #Initalize clientNumberStubs with clientNumberStubs to send clientNumbers
         if str(i) != clientNum: 
             port = 'localhost:5005'+str(i)
@@ -406,11 +413,12 @@ def run():
     for i in range(0,5): #Send initial message
         if str(i) != clientNum:
             message = str(clientNum)
-            nullret = clientNumberStubs[i].SendClientNumber(messaging_pb2.Request(message=message))
+            if failedLinks[int(i)] != 1:
+                nullret = clientNumberStubs[i].SendClientNumber(messaging_pb2.Request(message=message))
 
 
 def terminalInput():
-    global clientNum,state,votedFor,terminalStubs,getValue,replicatedDictionary
+    global clientNum,state,votedFor,terminalStubs,getValue,replicatedDictionary,failedLinks
     while True: #terminal input
         option = input()
         match option:
@@ -431,7 +439,12 @@ def terminalInput():
                         dictValue = "" 
                     )
                     print("Voted for = ",votedFor)
-                    terminalStubs[int(votedFor)].SendTerminalCommandRedirect(args) 
+                    try:
+                        if failedLinks[int(votedFor)] != 1:
+                            terminalStubs[int(votedFor)].SendTerminalCommandRedirect(args) 
+                    except grpc.RpcError as e:
+                        print("Could not reach client",votedFor)
+                    
                 
             case "put":
                 print("Selected: put")
@@ -452,7 +465,11 @@ def terminalInput():
                         dictKey = key,
                         dictValue = value
                     )
-                    terminalStubs[int(votedFor)].SendTerminalCommandRedirect(args) 
+                    try:
+                        if failedLinks[int(votedFor)] != 1:
+                            terminalStubs[int(votedFor)].SendTerminalCommandRedirect(args) 
+                    except grpc.RpcError as e:
+                         print("Could not reach client",votedFor)
                 
             case "get":
                 print("Selected: get")
@@ -468,7 +485,11 @@ def terminalInput():
                         dictKey = key,
                         dictValue = ""
                     )
-                    terminalStubs[int(votedFor)].SendTerminalCommandRedirect(args) 
+                    try:
+                        if failedLinks[int(votedFor)] != 1:
+                            terminalStubs[int(votedFor)].SendTerminalCommandRedirect(args) 
+                    except grpc.RpcError as e:
+                         print("Could not reach client",votedFor)
             case "printDict":
                 print("Selected: printDict")
                 dictKey = input("Enter key (PID.COUNTER)")
@@ -480,9 +501,13 @@ def terminalInput():
     
             case "failLink":
                 print("Selected: failLik")
+                clientNumToSever = int(input("Client connection you wish to sever"))
+                failedLinks[clientNumToSever] = 1
 
             case "fixLink":
                 print("Selected: fixLink")
+                clientNumToFix = int(input("Client connection you wish to fix"))
+                failedLinks[clientNumToFix] = 0
 
             case "failProcess":
                 print("Selected: failProcess")
@@ -497,10 +522,11 @@ def sendElectionRequests(i):
     global clientNum,clientNumberStubs,messageStubs,requestVotesStub,numVotes,forfeit,currentTerm
     print("Sending request to client",i)
     try:
-        results = requestVotesStub[i].SendVoteRequest(messaging_pb2.Term(term=currentTerm))
+        if failedLinks[int(i)] != 1:
+            results = requestVotesStub[i].SendVoteRequest(messaging_pb2.Term(term=currentTerm))
         receivedTerm = results.term.term #requested client's updated term
         voteGranted = results.vg.vote #whether requested client gives vote to us or not
-        print(voteGranted)
+        # print(voteGranted)
         if receivedTerm > currentTerm:
             currentTerm = receivedTerm
             writeTermToFile()
@@ -597,7 +623,8 @@ def electionTimeout():
 def sendHeartBeats(i):
     global heartbeatStubs
     try:
-        nullret = heartbeatStubs[i].SendHeartbeat(messaging_pb2.Request(message=str(clientNum)))
+        if failedLinks[int(i)] != 1:
+            nullret = heartbeatStubs[i].SendHeartbeat(messaging_pb2.Request(message=str(clientNum)))
     except grpc.RpcError as e:
         print("Could not send heartbeat to client",i)
     return

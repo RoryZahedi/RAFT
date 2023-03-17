@@ -277,6 +277,8 @@ def sendAppendEntriesFunc(command,issuingClientNum = -1, clientIDs = [],dictID =
     elif command == 'get':
         
         # log.append([currentTerm,0,command,"",dictID,issuingClientNum,dictKey])
+        
+
         log.append([currentTerm,0,command,"",dictID,issuingClientNum])
         #get command log entry [currentTerm, committed, nameofCommand, hash of previous entry, 
         # dictionary_id, issuing client's client-id,  key (to get value) encrypted with dictionary public key
@@ -284,15 +286,24 @@ def sendAppendEntriesFunc(command,issuingClientNum = -1, clientIDs = [],dictID =
 
 
     elif command == 'put':
-        print("Dict Value = ",dictValue)
         res = ''.join(secrets.choice(string.ascii_uppercase + string.digits) for i in range(128))
+        t = ""
+        for i in range(len(dictKey)):
+            t = t + chr(ord(dictKey[i]) + 1)
+        val = res[0:63]
+        end = len(dictKey)
+        final1 = val + t.upper() + str(end)
 
 
-        salt = res + str(dictKey)
-        resnew = ''.join(secrets.choice(string.ascii_uppercase + string.digits) for i in range(128))
+        res = ''.join(secrets.choice(string.ascii_uppercase + string.digits) for i in range(128))
+        t = ""
+        for i in range(len(dictValue)):
+            t = t + chr(ord(dictValue[i]) + 1)
+        val = res[0:63]
+        end = len(dictKey)
+        final2 = val + t.upper() + str(end)
 
-        otherVal = res + str(dictValue)
-        log.append([currentTerm,0,command,"",dictID,issuingClientNum,salt, otherVal])
+        log.append([currentTerm,0,command,"",dictID,issuingClientNum, final1, final2])
         #TODO actually put it
         #put command log entry [currentTerm, committed, nameofCommand,hash of previous entry, dictionary_id, issuing client;s client-id, 
         # key-vlalue pair encrypted with dictionary public key]
