@@ -62,12 +62,16 @@ class RequestVoteServicer(messaging_pb2_grpc.RequestVoteServicer):
             writeVotedForToFile()
             if state != "follower":
                 forfeit = 1
+                voteGranted = True
+                votedFor = int(otherClientNumber)
                 state = "follower"
                 print("Forfeiting election for term",currentTerm)
                 electionTimer = random.randint(20, 30)
         if currentTerm == receivedTerm and (votedFor == -1 or int(votedFor) == int(otherClientNumber)) and int(clientNum) > int(otherClientNumber):#TODO: hardcoded
             if state != "follower":
                 forfeit = 1
+                voteGranted = True
+                votedFor = int(otherClientNumber)
                 state = "follower"
                 print("Forfeiting election for term",currentTerm)
                 electionTimer = random.randint(20, 30)
@@ -428,10 +432,6 @@ def terminalInput():
 
             case _:
                 print("Invalid input,",option)
-
-
-
-
 
 
         
