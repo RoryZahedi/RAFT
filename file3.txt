@@ -20,6 +20,6 @@ MFswDQYJKoZIhvcNAQEBBQADSgAwRwJAb7Wf23HKpap70+cGuuBlrnflV3qYOYMz
 
 MFswDQYJKoZIhvcNAQEBBQADSgAwRwJAZXMXYsHAA+hV6SXDqJ86zrDoeZd+xPW4
 
-CurrentTerm: 5
-VotedFor: 0
+CurrentTerm: 2
+VotedFor: 4
 log: 

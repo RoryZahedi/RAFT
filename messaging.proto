@@ -60,6 +60,11 @@ message TerminalArgs{
     string dictValue = 5;
 }
 
+message RequestVoteArgs{
+    int32 term = 1;
+    string leaderLog = 2;
+}
+
 service Messaging {
     rpc SendMessage(Request) returns (Response) {}
 }
@@ -73,7 +78,7 @@ service ClientNumber{
 }
 
 service RequestVote{
-    rpc SendVoteRequest(Term) returns (electionRequestResponse) {}
+    rpc SendVoteRequest(RequestVoteArgs) returns (electionRequestResponse) {}
 }
 
 service AppendEntries{

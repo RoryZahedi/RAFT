@@ -48,6 +48,8 @@ class HeartbeatServicer(messaging_pb2_grpc.HeartbeatServicer):
     
       
         print(f"Received heartbeet: from {otherClient[peer_ip]}")
+        votedFor = int(otherClientNumber)
+        print("voting for",votedFor)
         electionTimer = random.randint(20,30)
         print()
         return empty_pb2.Empty()
@@ -58,11 +60,20 @@ class RequestVoteServicer(messaging_pb2_grpc.RequestVoteServicer):
         global failedLinks
         peer_ip = context.peer().split(":")[-1]
         otherClientNumber = otherClient[peer_ip]
+        # print("Made it here and failed links is",failedLinks)
         if failedLinks[int(otherClientNumber)] == 1:
             status_code = grpc.StatusCode.INVALID_ARGUMENT
             context.abort_with_status(grpc.StatusCode.INVALID_ARGUMENT, "")
         time.sleep(3)
-        receivedTerm = request.term 
+        receivedTerm = request.term
+        
+        leaderLog = request.leaderLog
+        # print("Leader log is ",request.leaderLog)
+        if len(leaderLog) == 0:
+            leaderLog = []
+        else:
+            leaderLog = [[eval(item) if item.isdigit() else item.strip("\"") for item in inner.split(",")] for inner in request.leaderLog(";")]
+ 
         print(f"Received vote request from {otherClientNumber} with term {receivedTerm}")
         voteGranted = False
         if currentTerm < receivedTerm:
@@ -72,24 +83,39 @@ class RequestVoteServicer(messaging_pb2_grpc.RequestVoteServicer):
             writeVotedForToFile()
             if state != "follower":
                 forfeit = 1
-                voteGranted = True
-                votedFor = int(otherClientNumber)
+                # voteGranted = True
+                # votedFor = int(otherClientNumber)
                 state = "follower"
                 print("Forfeiting election for term",currentTerm)
                 electionTimer = random.randint(20, 30)
-        if currentTerm == receivedTerm and (votedFor == -1 or int(votedFor) == int(otherClientNumber)) and int(clientNum) > int(otherClientNumber):#TODO: hardcoded
-            if state != "follower":
-                forfeit = 1
+        if currentTerm == receivedTerm and (votedFor == -1 or int(votedFor) == int(otherClientNumber)): 
+            if len(log) > 0 and len(leaderLog) == 0:
+                return messaging_pb2.electionRequestResponse(
+                    term=messaging_pb2.receivedTerm(term=currentTerm),
+                    vg=messaging_pb2.voteGranted(vote=False)
+                )
+                #rejectleader
+            elif (len(log) ==0 and len(leaderLog) >=0):
                 voteGranted = True
                 votedFor = int(otherClientNumber)
-                state = "follower"
-                print("Forfeiting election for term",currentTerm)
+                #default to leader
+            elif int(log[-1][0]) < int(leaderLog[-1][0]):
+                voteGranted = True
+                votedFor = int(otherClientNumber)
+                #default to leader
+            elif int(log[-1][0]) == int(leaderLog[-1][0]):
+                if len(log) <= len(leaderLog):
+                    voteGranted = True
+                    votedFor = int(otherClientNumber)
+                    #default to leader
+            if voteGranted == True:
+                votedFor = int(otherClientNumber)
                 electionTimer = random.randint(20, 30)
-            votedFor = int(otherClientNumber)
-            print("Voted for:",votedFor)
-            writeVotedForToFile()
-            voteGranted = True
-            electionTimer = random.randint(20, 30)
+                writeVotedForToFile()
+                if state != "follower":
+                    forfeit = 1
+                    state = "follower"
+                    print("Forfeiting election for term",currentTerm)
         response = messaging_pb2.electionRequestResponse(
             term=messaging_pb2.receivedTerm(term=currentTerm),
             vg=messaging_pb2.voteGranted(vote=voteGranted)
@@ -519,20 +545,27 @@ def terminalInput():
 
         
 def sendElectionRequests(i):
-    global clientNum,clientNumberStubs,messageStubs,requestVotesStub,numVotes,forfeit,currentTerm
+    global clientNum,clientNumberStubs,messageStubs,requestVotesStub,numVotes,forfeit,currentTerm,log
     print("Sending request to client",i)
     try:
         if failedLinks[int(i)] != 1:
-            results = requestVotesStub[i].SendVoteRequest(messaging_pb2.Term(term=currentTerm))
-        receivedTerm = results.term.term #requested client's updated term
-        voteGranted = results.vg.vote #whether requested client gives vote to us or not
+            logString = ""
+            if len(log) > 0:
+                logString = ";".join([",".join(map(str, inner_lst)) for inner_lst in log])
+            args = messaging_pb2.RequestVoteArgs( 
+                term=currentTerm,
+                leaderLog = logString
+            )
+            results = requestVotesStub[i].SendVoteRequest(args)
+            receivedTerm = results.term.term #requested client's updated term
+            voteGranted = results.vg.vote #whether requested client gives vote to us or not
         # print(voteGranted)
-        if receivedTerm > currentTerm:
-            currentTerm = receivedTerm
-            writeTermToFile()
-            forfeit = 1     
-        if voteGranted:
-            numVotes[i] = 1
+            if receivedTerm > currentTerm:
+                currentTerm = receivedTerm
+                writeTermToFile()
+                forfeit = 1     
+            if voteGranted:
+                numVotes[i] = 1
     except grpc.RpcError as e:
         print("Could not reach client",i)
             
@@ -621,7 +654,8 @@ def electionTimeout():
             print("Heartbeat timeout!")
             
 def sendHeartBeats(i):
-    global heartbeatStubs
+    global heartbeatStubs,votedFor
+    votedFor = int(clientNum)
     try:
         if failedLinks[int(i)] != 1:
             nullret = heartbeatStubs[i].SendHeartbeat(messaging_pb2.Request(message=str(clientNum)))
@@ -744,7 +778,7 @@ if __name__ == '__main__':
     currentTerm = 0
     writeTermToFile()
     
-    time.sleep(10)
+    time.sleep(5)
     
     heartbeatTimer = 0
     electionTimer = random.randint(20,30)

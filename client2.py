@@ -208,9 +208,14 @@ def performComittedAction():
         if dictionaryID in replicatedDictionary:
             # [currentTerm, committed, nameofCommand,hash of previous entry, dictionary_id, issuing client's client-id, 
             # key-vlalue pair encrypted with dictionary public key]
-            replicatedDictionary[dictionaryID][log[-1][6]] = log[-1][7] 
+            resultantKey = log[-1][6][63:]
+            resultantValue = log[-1][7][63:]
+            replicatedDictionary[dictionaryID][resultantKey] = resultantValue
+            print(resultantKey)
+            print(resultantValue)
     elif command == 'get':
         dictionaryID = str(log[-1][4])
+        
         #  currentTerm,0,command,"",dictID,issuingClientNum]
         if int(clientNum) == int(log[-1][5]):
             print("Get returned:",replicatedDictionary[log[-1][4]])  
@@ -275,6 +280,7 @@ def sendAppendEntriesFunc(command,issuingClientNum = -1, clientIDs = [],dictID =
     # , dictionaryid, dictionary public key, list of dictionary private keys]
 
     elif command == 'get':
+        
         
         # log.append([currentTerm,0,command,"",dictID,issuingClientNum,dictKey])
         
