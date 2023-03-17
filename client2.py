@@ -2,6 +2,8 @@ from concurrent import futures
 
 import grpc
 import messaging_pb2
+import secrets
+import string
 import messaging_pb2_grpc
 import time
 import ipaddress
@@ -19,6 +21,7 @@ from Crypto.Cipher import AES
 from Crypto.Random import get_random_bytes
 
 otherClient = {} #IP/Port -> ClientNum
+
 
 class MessagingServicer(messaging_pb2_grpc.MessagingServicer):
     def SendMessage(self, request, context):
@@ -51,13 +54,9 @@ class HeartbeatServicer(messaging_pb2_grpc.HeartbeatServicer):
 class RequestVoteServicer(messaging_pb2_grpc.RequestVoteServicer):
     def SendVoteRequest(self,request,context):
         global currentTerm, votedFor, electionTimer,forfeit,state
-        global failedLinks
+        time.sleep(3)
         peer_ip = context.peer().split(":")[-1]
         otherClientNumber = otherClient[peer_ip]
-        if failedLinks[int(otherClientNumber)] == 1:
-            status_code = grpc.StatusCode.INVALID_ARGUMENT
-            context.abort_with_status(grpc.StatusCode.INVALID_ARGUMENT, "")
-        time.sleep(3)
         receivedTerm = request.term 
         print(f"Received vote request from {otherClientNumber} with term {receivedTerm}")
         voteGranted = False
@@ -95,12 +94,6 @@ class RequestVoteServicer(messaging_pb2_grpc.RequestVoteServicer):
 class AppendEntriesServicer(messaging_pb2_grpc.AppendEntriesServicer):
     def SendAppendEntries(self,request,context):
         global currentTerm,state,forfeit, electionTimer, log
-        global failedLinks
-        peer_ip = context.peer().split(":")[-1]
-        otherClientNumber = otherClient[peer_ip]
-        if failedLinks[int(otherClientNumber)] == 1:
-            status_code = grpc.StatusCode.INVALID_ARGUMENT
-            context.abort_with_status(grpc.StatusCode.INVALID_ARGUMENT, "")
         time.sleep(3)
         peer_ip = context.peer().split(":")[-1]
         print("RECEIVED APPEND")
@@ -165,12 +158,6 @@ class AppendEntriesServicer(messaging_pb2_grpc.AppendEntriesServicer):
     
 class RedirectServicer(messaging_pb2_grpc.RedirectServicer):
     def SendTerminalCommandRedirect(self,request,context):
-        global failedLinks
-        peer_ip = context.peer().split(":")[-1]
-        otherClientNumber = otherClient[peer_ip]
-        if failedLinks[int(otherClientNumber)] == 1:
-            status_code = grpc.StatusCode.INVALID_ARGUMENT
-            context.abort_with_status(grpc.StatusCode.INVALID_ARGUMENT, "")
         print("Entered!!")
         peer_ip = context.peer().split(":")[-1]
         otherClientNumber = otherClient[peer_ip]
@@ -190,12 +177,6 @@ class RedirectServicer(messaging_pb2_grpc.RedirectServicer):
 
 class CommitServicer(messaging_pb2_grpc.CommitServicer):
     def SendCommitUpdate(self,request,context):
-        global failedLinks
-        peer_ip = context.peer().split(":")[-1]
-        otherClientNumber = otherClient[peer_ip]
-        if failedLinks[int(otherClientNumber)] == 1:
-            status_code = grpc.StatusCode.INVALID_ARGUMENT
-            context.abort_with_status(grpc.StatusCode.INVALID_ARGUMENT, "")
         global log,replicatedDictionary
         time.sleep(3)
         print("Committing!")
@@ -276,7 +257,10 @@ def sendAppendEntriesFunc(command,issuingClientNum = -1, clientIDs = [],dictID =
         counter += 1
         private_key = rsa.generate_private_key(public_exponent=65537,key_size=2048,)
         public_key = private_key.public_key()
-        private_keyList = len(clientIDs)*[private_key]
+        private_keyList = []
+        for i in range(len(clientIDs)):
+            res = ''.join(secrets.choice(string.ascii_uppercase + string.digits) for i in range(128))
+            private_keyList.append(res.encode())
         # print("priv_keyList:",private_keyList)
         print(type(clientIDs),print(type(clientIDs) == type(list)))
         s = ''
@@ -301,7 +285,14 @@ def sendAppendEntriesFunc(command,issuingClientNum = -1, clientIDs = [],dictID =
 
     elif command == 'put':
         print("Dict Value = ",dictValue)
-        log.append([currentTerm,0,command,"",dictID,issuingClientNum,dictKey,dictValue])
+        res = ''.join(secrets.choice(string.ascii_uppercase + string.digits) for i in range(128))
+
+
+        salt = res + str(dictKey)
+        resnew = ''.join(secrets.choice(string.ascii_uppercase + string.digits) for i in range(128))
+
+        otherVal = res + str(dictValue)
+        log.append([currentTerm,0,command,"",dictID,issuingClientNum,salt, otherVal])
         #TODO actually put it
         #put command log entry [currentTerm, committed, nameofCommand,hash of previous entry, dictionary_id, issuing client;s client-id, 
         # key-vlalue pair encrypted with dictionary public key]
@@ -410,7 +401,7 @@ def run():
 
 
 def terminalInput():
-    global clientNum,state,votedFor,terminalStubs,getValue,replicatedDictionary
+    global clientNum,state,votedFor,terminalStubs,getValue,replicatedDictionary,severedLink
     while True: #terminal input
         option = input()
         match option:
@@ -480,9 +471,13 @@ def terminalInput():
     
             case "failLink":
                 print("Selected: failLik")
+                clientToSever = input("Enter the clientNum you'd like to sever the link with:")
+                severedLink[int(clientToSever)] = 1
 
             case "fixLink":
                 print("Selected: fixLink")
+                clientToFix = input("Enter the clientNum you'd like to fix the link with")
+                severedLink[int(clientToFix)] = 1
 
             case "failProcess":
                 print("Selected: failProcess")
@@ -684,7 +679,6 @@ if __name__ == '__main__':
     print("Client num:",end="")
     clientNum = input()
     pubKeyDict, privateKey, hashkey = loadKeysAtStart(clientNum)
-    failedLinks = [0]*5
     start_new_thread(serve, (clientNum,))
     print("Press enter to start")
     input()
@@ -700,6 +694,7 @@ if __name__ == '__main__':
     CommitStubs = []
     terminalStubs = []
     replicatedDictionary = {}
+    severedLink = [0]*5
     run()
     
     start_new_thread(terminalInput,())
