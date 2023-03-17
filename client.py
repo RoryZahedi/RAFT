@@ -185,14 +185,38 @@ class RedirectServicer(messaging_pb2_grpc.RedirectServicer):
 
 class CommitServicer(messaging_pb2_grpc.CommitServicer):
     def SendCommitUpdate(self,request,context):
-        global log
+        global log,replicatedDictionary
         time.sleep(3)
         print("Committing!")
-        global log
         log[-1][1] = 1
         writeLogToFile()
-        print("log after commit:", log)
+        performComittedAction()
+      
         return empty_pb2.Empty()
+
+def performComittedAction():
+    global log,clientNum,replicatedDictionary
+    # print("log = ",log)
+    # print(log[-1][2])
+    command = log[-1][2].lower()
+    dictionaryID = str(log[-1][5][0])+'.'+str(log[-1][5][1])
+    if command == 'create':
+            #    currentTerm, committed, nameofcomamnd, hash of previous entry, clientlist, 
+            # , dictionaryid, dictionary public key, list of dictionary private keys]
+        if str(clientNum) in log[-1][4]:
+            replicatedDictionary[dictionaryID] = {}
+    elif command == 'put':
+        if dictionaryID in replicatedDictionary:
+            # [currentTerm, committed, nameofCommand,hash of previous entry, dictionary_id, issuing client;s client-id, 
+            # key-vlalue pair encrypted with dictionary public key]
+            replicatedDictionary[dictionaryID][log[-1][6]] = log[-1][7] 
+    elif command == 'get':
+        #  currentTerm,0,command,"",dictID,issuingClientNum]
+        if int(clientNum) == int(log[-1][5]):
+            print("Get returned:",replicatedDictionary[log[-1][4]])  
+    else:
+        print("Unknown command:",command)
+      
 
     
 def serve(clientNum):
@@ -299,6 +323,8 @@ def sendAppendEntriesFunc(command,issuingClientNum = -1, clientIDs = [],dictID =
     print("Num succ = ",sum(numSucc))
     if sum(numSucc) >= 3:
         log[-1][1] = 1
+
+        # performComittedAction()
         threads = []
         for i in range(0,5):
             if i != int(clientNum):
@@ -307,8 +333,9 @@ def sendAppendEntriesFunc(command,issuingClientNum = -1, clientIDs = [],dictID =
                 t.start()
         for t in threads:
              t.join()
+        # writeLogToFile()
         
-        writeLogToFile()
+        
     
             
 def asynchSendAppendEntries(args,clientNumToSendTo,numSucc):
@@ -327,7 +354,7 @@ def asynchSendCommit(i):
     try:
         nullRet = CommitStubs[i].SendCommitUpdate(empty_pb2.Empty())
     except grpc.RpcError as e:
-        print("Could not reach client",i)
+        print("Could not reach client for commit",e)
     return
 
 def run():
@@ -416,9 +443,12 @@ def terminalInput():
                     terminalStubs[int(votedFor)].SendTerminalCommandRedirect(args) 
             case "printDict":
                 print("Selected: printDict")
-            
+                dictKey = input("Enter key (PID.COUNTER)")
+                print("Dict = ",replicatedDictionary[dictKey])
+
             case "printAll":
                 print("Selected: printAll")
+                print("Dict = ",replicatedDictionary)
     
             case "failLink":
                 print("Selected: failLik")
@@ -640,6 +670,7 @@ if __name__ == '__main__':
     AppendEntriesStubs = []
     CommitStubs = []
     terminalStubs = []
+    replicatedDictionary = {}
     run()
     
     start_new_thread(terminalInput,())
