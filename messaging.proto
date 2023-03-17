@@ -54,7 +54,7 @@ message SendAppendEntriesArgsTwo{
 
 message TerminalArgs{
     string commandIssued = 1;
-    repeated int32 clientIDs = 2;
+    string clientIDs = 2;
     string dictID = 3;
     string dictKey = 4;
     string dictValue = 5;

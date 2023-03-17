@@ -199,12 +199,19 @@ def performComittedAction():
     # print("log = ",log)
     # print(log[-1][2])
     command = log[-1][2].lower()
-    dictionaryID = str(log[-1][4][0])+'.'+str(log[-1][4][1])
+    print(log[-1][5])
+    dictionaryID = str(log[-1][5])
+    print("log = ",log)
+    print(dictionaryID)
     if command == 'create':
             #    currentTerm, committed, nameofcomamnd, hash of previous entry, clientlist, 
             # , dictionaryid, dictionary public key, list of dictionary private keys]
-        if str(clientNum) in log[-1][4]:
+        print("command is create!")
+        clientList = log[-1][4].split()
+        if str(clientNum) in clientList:
+            print("CREATING \n replicatedDict now",replicatedDictionary)
             replicatedDictionary[dictionaryID] = {}
+            print("After: ",replicatedDictionary)
     elif command == 'put':
         if dictionaryID in replicatedDictionary:
             # [currentTerm, committed, nameofCommand,hash of previous entry, dictionary_id, issuing client;s client-id, 
@@ -253,7 +260,7 @@ def sendAppendEntriesFunc(command,issuingClientNum = -1, clientIDs = [],dictID =
 
     if command == 'create':
 
-        dictID = str((currentTerm,counter))
+        dictID = str(currentTerm) + '.'+ str(counter)
         counter += 1
         private_key = rsa.generate_private_key(public_exponent=65537,key_size=2048,)
         public_key = private_key.public_key()
@@ -298,8 +305,8 @@ def sendAppendEntriesFunc(command,issuingClientNum = -1, clientIDs = [],dictID =
     #append requested entry
     #maybe make special cse for when log was empty prior to appending for the first time?
     logString = ";".join([",".join(map(str, inner_lst)) for inner_lst in log])
-    print("Log is:", log)
-    print("Log string is:", logString)
+    # print("Log is:", log)
+    # print("Log string is:", logString)
     args = messaging_pb2.SendAppendEntriesArgs( 
         term=messaging_pb2.Term(term = currentTerm),
         prevLogIndex=messaging_pb2.Index(index = prevLogIndex),
@@ -386,15 +393,16 @@ def run():
 
 
 def terminalInput():
-    global clientNum,state,votedFor,terminalStubs,getValue
+    global clientNum,state,votedFor,terminalStubs,getValue,replicatedDictionary
     while True: #terminal input
         option = input()
         match option:
             case "create":
                 print("Selected: create")
                 print("Please enter list of clients seperated by space.",end='')
-                members = input().split(' ')
-                clientIDList = [int(str(x)) for x in members]
+                members = input()
+                # clientIDList = [int(str(x)) for x in members]
+                clientIDList = members
                 if state == 'leader':
                     sendAppendEntriesFunc(command='Create',issuingClientNum=clientNum,clientIDs = clientIDList)
                 elif state == 'follower': #redirect it
