@@ -324,7 +324,7 @@ def sendAppendEntriesFunc(command,issuingClientNum = -1, clientIDs = [],dictID =
     if sum(numSucc) >= 3:
         log[-1][1] = 1
 
-        # performComittedAction()
+        performComittedAction()
         threads = []
         for i in range(0,5):
             if i != int(clientNum):
@@ -333,7 +333,7 @@ def sendAppendEntriesFunc(command,issuingClientNum = -1, clientIDs = [],dictID =
                 t.start()
         for t in threads:
              t.join()
-        # writeLogToFile()
+        writeLogToFile()
         
         
     
