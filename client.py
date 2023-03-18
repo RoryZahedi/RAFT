@@ -269,7 +269,7 @@ def performComittedAction():
             if log[-1][-1] not in replicatedDictionary[dictionaryID]:
                 print("Key",log[-1][-1], "not found in dict")
             else:
-                print("Get returned:",replicatedDictionary[dictionaryID][log][-1][-1])  
+                print("Get returned:",replicatedDictionary[dictionaryID][log[-1][-1]])  
     else:
         print("Unknown command:",command)
       
