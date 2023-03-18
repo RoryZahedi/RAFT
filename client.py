@@ -295,7 +295,7 @@ def serve(clientNum):
         server.stop(0)
 
 def sendAppendEntriesFunc(command,issuingClientNum = -1, clientIDs = [],dictID = "", dictKey = "", dictValue = ""):
-    global currentTerm,clientNum,log,state,AppendEntriesStubs,CommitStubs, channel, AppendEntriesStubsTwo
+    global currentTerm,clientNum,log,state,AppendEntriesStubs,CommitStubs, channel, AppendEntriesStubsTwo, usingCrypto
     global clientNum,clientNumberStubs,messageStubs,requestVotesStub,numVotes,forfeit,currentTerm,counter
 
     if len(log) == 0:
@@ -315,8 +315,12 @@ def sendAppendEntriesFunc(command,issuingClientNum = -1, clientIDs = [],dictID =
         public_key = private_key.public_key()
         private_keyList = []
         for i in range(len(clientIDs)):
-            res = ''.join(secrets.choice(string.ascii_uppercase + string.digits) for i in range(128))
-            private_keyList.append(res.encode())
+            if usingCrypto:
+                res = ''.join(secrets.choice(string.ascii_uppercase + string.digits) for i in range(128))
+                private_keyList.append(res.encode())
+            else:
+                print("here")
+                private_keyList.append(private_key)
         # print("priv_keyList:",private_keyList)
         print(type(clientIDs),print(type(clientIDs) == type(list)))
         s = ''
@@ -454,12 +458,18 @@ def run():
 
 
 def terminalInput():
-    global clientNum,state,votedFor,terminalStubs,getValue,replicatedDictionary,failedLinks
+    global clientNum,state,votedFor,terminalStubs,getValue,replicatedDictionary,failedLinks, usingCrypto
     while True: #terminal input
         option = input()
         match option:
             case "create":
                 print("Selected: create")
+                print("With encryption(y/n)?",end='')
+                encryptionAnswer = input()
+                if encryptionAnswer == 'n':
+                    usingCrypto = False
+                else:
+                    print(encryptionAnswer)
                 print("Please enter list of clients seperated by space.",end='')
                 members = input()
                 # clientIDList = [int(str(x)) for x in members]
@@ -764,6 +774,7 @@ if __name__ == '__main__':
 
     channel = 0
     counter = 0
+    usingCrypto = True
     getValue = None
     clientNumberStubs = []
     messageStubs = []
