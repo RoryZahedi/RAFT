@@ -638,11 +638,9 @@ def electionTimeout():
 #     #Except if leader maybe the timer does not decrament
     global electionTimer,state,heartbeatTimer
     while True:
-        print("my state = ",state)
         while state == "follower":
             while electionTimer:
                 time.sleep(1)
-                print(electionTimer)
                 electionTimer-=1
             print("Election timedout!")
             state = "candidate"
