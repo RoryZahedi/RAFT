@@ -216,9 +216,11 @@ def performComittedAction():
     elif command == 'get':
         dictionaryID = str(log[-1][4])
         
+        resultantKey = log[-1][5][63:]
+        print(resultantKey)
         #  currentTerm,0,command,"",dictID,issuingClientNum]
         if int(clientNum) == int(log[-1][5]):
-            print("Get returned:",replicatedDictionary[log[-1][4]])  
+            print("Get returned:",replicatedDictionary[resultantKey])  
     else:
         print("Unknown command:",command)
       
@@ -281,11 +283,17 @@ def sendAppendEntriesFunc(command,issuingClientNum = -1, clientIDs = [],dictID =
 
     elif command == 'get':
         
-        
+        res = ''.join(secrets.choice(string.ascii_uppercase + string.digits) for i in range(128))
+        t = ""
+        for i in range(len(dictKey)):
+            t = t + chr(ord(dictKey[i]) + 1)
+        val = res[0:63]
+        end = len(dictKey)
+        final1 = val + t.upper() + str(end)
         # log.append([currentTerm,0,command,"",dictID,issuingClientNum,dictKey])
         
 
-        log.append([currentTerm,0,command,"",dictID,issuingClientNum])
+        log.append([currentTerm,0,command,"",dictID,issuingClientNum, dictKey])
         #get command log entry [currentTerm, committed, nameofCommand, hash of previous entry, 
         # dictionary_id, issuing client's client-id,  key (to get value) encrypted with dictionary public key
         

@@ -1,5 +1,6 @@
 from concurrent import futures
-
+import secrets
+import string
 import grpc
 import messaging_pb2
 import messaging_pb2_grpc
@@ -38,7 +39,7 @@ class ClientNumberServicer(messaging_pb2_grpc.ClientNumberServicer):
     
 class HeartbeatServicer(messaging_pb2_grpc.HeartbeatServicer):
     def SendHeartbeat(self, request, context):
-        global electionTimer, votedFor
+        global electionTimer, votedFor, state, forfeit
         global failedLinks
         peer_ip = context.peer().split(":")[-1]
         otherClientNumber = otherClient[peer_ip]
@@ -50,6 +51,9 @@ class HeartbeatServicer(messaging_pb2_grpc.HeartbeatServicer):
         print(f"Received heartbeet: from {otherClient[peer_ip]}")
         votedFor = int(otherClientNumber)
         print("voting for",votedFor)
+        if state != "follower":
+            state = "follower"
+            forfeit = 1
         electionTimer = random.randint(20,30)
         print()
         return empty_pb2.Empty()
@@ -201,15 +205,15 @@ class RedirectServicer(messaging_pb2_grpc.RedirectServicer):
         if failedLinks[int(otherClientNumber)] == 1:
             status_code = grpc.StatusCode.INVALID_ARGUMENT
             context.abort_with_status(grpc.StatusCode.INVALID_ARGUMENT, "")
-        print("Entered!!")
+
         peer_ip = context.peer().split(":")[-1]
         otherClientNumber = otherClient[peer_ip]
-        print("Received", request.commandIssued, "from", str(otherClientNumber))
-        print(request.commandIssued)
-        print(int(otherClientNumber))
-        print(request.clientIDs)
-        print(request.clientIDs)
-        print(request.dictID)
+        # print("Received", request.commandIssued, "from", str(otherClientNumber))
+        # print(request.commandIssued)
+        # print(int(otherClientNumber))
+        # print(request.clientIDs)
+        # print(request.clientIDs)
+        # print(request.dictID)
 
         sendAppendEntriesFunc(command = request.commandIssued, issuingClientNum=int(otherClientNumber), 
                               clientIDs=request.clientIDs,dictID=request.dictID,dictKey=request.dictKey,
@@ -241,7 +245,7 @@ def performComittedAction():
     # print(log[-1][2])
     command = log[-1][2].lower()
     
-    print("log = ",log)
+    # print("log = ",log)
     if command == 'create':
 
             #    currentTerm, committed, nameofcomamnd, hash of previous entry, clientlist, 
@@ -260,9 +264,12 @@ def performComittedAction():
             replicatedDictionary[dictionaryID][log[-1][6]] = log[-1][7] 
     elif command == 'get':
         dictionaryID = str(log[-1][4])
-        #  currentTerm,0,command,"",dictID,issuingClientNum]
+        #  currentTerm,0,command,"",dictID,issuingClientNum,dictKey]
         if int(clientNum) == int(log[-1][5]):
-            print("Get returned:",replicatedDictionary[log[-1][4]])  
+            if log[-1][-1] not in replicatedDictionary[dictionaryID]:
+                print("Key",log[-1][-1], "not found in dict")
+            else:
+                print("Get returned:",replicatedDictionary[dictionaryID][log][-1][-1])  
     else:
         print("Unknown command:",command)
       
@@ -306,7 +313,10 @@ def sendAppendEntriesFunc(command,issuingClientNum = -1, clientIDs = [],dictID =
         counter += 1
         private_key = rsa.generate_private_key(public_exponent=65537,key_size=2048,)
         public_key = private_key.public_key()
-        private_keyList = len(clientIDs)*[private_key]
+        private_keyList = []
+        for i in range(len(clientIDs)):
+            res = ''.join(secrets.choice(string.ascii_uppercase + string.digits) for i in range(128))
+            private_keyList.append(res.encode())
         # print("priv_keyList:",private_keyList)
         print(type(clientIDs),print(type(clientIDs) == type(list)))
         s = ''
@@ -323,7 +333,7 @@ def sendAppendEntriesFunc(command,issuingClientNum = -1, clientIDs = [],dictID =
     elif command == 'get':
         
         # log.append([currentTerm,0,command,"",dictID,issuingClientNum,dictKey])
-        log.append([currentTerm,0,command,"",dictID,issuingClientNum])
+        log.append([currentTerm,0,command,"",dictID,issuingClientNum,dictKey])
         #get command log entry [currentTerm, committed, nameofCommand, hash of previous entry, 
         # dictionary_id, issuing client's client-id,  key (to get value) encrypted with dictionary public key
         
@@ -474,7 +484,7 @@ def terminalInput():
                 
             case "put":
                 print("Selected: put")
-                print("Please enter DICTID")
+                print("Please enter DICTID \n")
                 PID = input("PID:")
                 dIDCounter = input("Counter:")
                 dictID = PID + "." + dIDCounter
@@ -499,8 +509,8 @@ def terminalInput():
                 
             case "get":
                 print("Selected: get")
-                dictID = input("Please enter: dictionary ID")
-                key = input("Please enter the dict key")
+                dictID = input("Please enter dictionary ID (PID.Counter):")
+                key = input("Please enter the dict key (key):")
                 if state == 'leader':
                     sendAppendEntriesFunc(command= 'Get',issuingClientNum=clientNum,dictID=dictID,dictKey=key)
                 elif state == 'follower':
@@ -573,6 +583,7 @@ def sendElectionRequests(i):
 
 def election():
     #add variable here
+    print("still here")
     global clientNum, votedFor,numVotes,forfeit, electionTimer,state,currentTerm,candidateElectionTimer
     votedFor = int(clientNum)
     writeVotedForToFile()
@@ -600,7 +611,7 @@ def election():
         return
     elif candidateElectionTimer == 0:
         return
-    
+    print("exiting election")
 
     
 
@@ -616,6 +627,7 @@ def candidateElectionTimeout():
         election_thread.start()
         while candidateElectionTimer > 0 and state == 'candidate':
             # print(candidateElectionTimer)
+            # print("in here")
             time.sleep(1)
             candidateElectionTimer-=1
         election_thread.join()
@@ -626,9 +638,11 @@ def electionTimeout():
 #     #Except if leader maybe the timer does not decrament
     global electionTimer,state,heartbeatTimer
     while True:
+        print("my state = ",state)
         while state == "follower":
             while electionTimer:
                 time.sleep(1)
+                print(electionTimer)
                 electionTimer-=1
             print("Election timedout!")
             state = "candidate"
@@ -682,7 +696,7 @@ def writeLogToFile():
     if len(log) == 0:
         lines[-1] = "log: " + "\n"
     else:
-        print(log)
+        # print(log)
         logString = ";".join([",".join(map(str, inner_lst)) for inner_lst in log])
         lines[-1] = "log: " + logString + "\n"
     with open(filename, 'w') as file:

@@ -9,4 +9,5 @@ for i in range(len(s)):
     t = t + chr(ord(s[i]) + 1)
 val = res[0:63]
 end = len(s)
+
 print(val + t.upper() + str(end))
