@@ -243,6 +243,7 @@ def performComittedAction():
     global log,clientNum,replicatedDictionary
     # print("log = ",log)
     # print(log[-1][2])
+
     command = log[-1][2].lower()
     
     # print("log = ",log)
@@ -753,14 +754,43 @@ def loadKeysAtStart(clientNum):
 
     return pubKeyDict, privateKey, hashkey
 
+def restartClient():
+    global log,filename,votedFor,currentTerm
+    print("log before is",log)
+    lines = [] #content of files
+    with open(filename, 'r') as file:
+        lines = file.readlines()
+    logstr = lines[-1] 
+    votedForColon = lines[-2].find(':')
+    votedFor = int(lines[-2][votedForColon+1:])
+
+    currentTermColon = lines[-3].find(':')
+    currentTerm = int(lines[-3][currentTermColon+1:])
+
+    logColon = lines[-1].find(':')
+    logString = lines[-1][logColon+1:len(lines[-1])-1]
+    logActions = logString.split(';')
+    for individualLogs in logActions:
+        l = []
+        for item in individualLogs.split(','):
+            entry = item.lstrip(' ')
+            if entry.isdigit():
+                entry = eval(entry)
+            else:
+                entry = entry.strip("\"")
+            l.append(entry)
+        log.append(l)
+        if(l[1]):
+            performComittedAction()
+
 if __name__ == '__main__':
     print("Client num:",end="")
     clientNum = input()
+    filename = "file"+str(clientNum)+".txt"
     pubKeyDict, privateKey, hashkey = loadKeysAtStart(clientNum)
     failedLinks = [0]*5
     start_new_thread(serve, (clientNum,))
-    print("Press enter to start")
-    input()
+    restart = input("Press enter to begin or \'r\' to restart")
 
     channel = 0
     counter = 0
@@ -772,37 +802,37 @@ if __name__ == '__main__':
     AppendEntriesStubs = []
     CommitStubs = []
     terminalStubs = []
+    log = []
+    votedFor = -1
     replicatedDictionary = {}
+    currentTerm = 0
+    if restart == 'r':
+        restartClient()
     run()
     
     start_new_thread(terminalInput,())
-    filename = "file"+str(clientNum)+".txt"
+    
 
     lines = [] #content of files
     with open(filename, 'r') as file:
         lines = file.readlines()
 
-    
-    
-
    
     state = "follower"
-    currentTerm = 0
     writeTermToFile()
     
     time.sleep(5)
     
     heartbeatTimer = 0
     electionTimer = random.randint(20,30)
-    votedFor = -1
+    
     writeVotedForToFile()
     numVotes = [0]*5
     forfeit = 0
-    candidateElectionTimer = 1
+    candidateElectionTimer = random.randint(20,30)
     #term, committed, number
-    log = []
+   
     writeLogToFile()
-    #log = [[index, term, committed, dictionary_id, client_numbersthathaveaccess, dictionary public key, version],]
     electionTimeout()
   
     while True:
