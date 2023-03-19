@@ -808,6 +808,7 @@ if __name__ == '__main__':
     currentTerm = 0
     if restart == 'r':
         restartClient()
+        input("Client restored, press enter to connect to the network")
     run()
     
     start_new_thread(terminalInput,())
