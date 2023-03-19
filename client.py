@@ -466,7 +466,7 @@ def run():
 
 
 def terminalInput():
-    global clientNum,state,votedFor,terminalStubs,getValue,replicatedDictionary,failedLinks
+    global clientNum,state,votedFor,terminalStubs,getValue,replicatedDictionary,failedLinks,log
     while True: #terminal input
         option = input()
         match option:
@@ -560,6 +560,8 @@ def terminalInput():
             case "failProcess":
                 print("Selected: failProcess")
 
+            case "printLog":
+                print("log = ",log)
 
             case _:
                 print("Invalid input,",option)
