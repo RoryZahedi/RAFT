@@ -78,7 +78,7 @@ class HeartbeatStub(object):
         """
         self.SendHeartbeat = channel.unary_unary(
                 '/messaging.Heartbeat/SendHeartbeat',
-                request_serializer=messaging__pb2.Request.SerializeToString,
+                request_serializer=messaging__pb2.SendAppendEntriesArgs.SerializeToString,
                 response_deserializer=google_dot_protobuf_dot_empty__pb2.Empty.FromString,
                 )
 
@@ -97,7 +97,7 @@ def add_HeartbeatServicer_to_server(servicer, server):
     rpc_method_handlers = {
             'SendHeartbeat': grpc.unary_unary_rpc_method_handler(
                     servicer.SendHeartbeat,
-                    request_deserializer=messaging__pb2.Request.FromString,
+                    request_deserializer=messaging__pb2.SendAppendEntriesArgs.FromString,
                     response_serializer=google_dot_protobuf_dot_empty__pb2.Empty.SerializeToString,
             ),
     }
@@ -122,7 +122,7 @@ class Heartbeat(object):
             timeout=None,
             metadata=None):
         return grpc.experimental.unary_unary(request, target, '/messaging.Heartbeat/SendHeartbeat',
-            messaging__pb2.Request.SerializeToString,
+            messaging__pb2.SendAppendEntriesArgs.SerializeToString,
             google_dot_protobuf_dot_empty__pb2.Empty.FromString,
             options, channel_credentials,
             insecure, call_credentials, compression, wait_for_ready, timeout, metadata)

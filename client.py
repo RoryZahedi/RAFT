@@ -39,24 +39,89 @@ class ClientNumberServicer(messaging_pb2_grpc.ClientNumberServicer):
     
 class HeartbeatServicer(messaging_pb2_grpc.HeartbeatServicer):
     def SendHeartbeat(self, request, context):
-        global electionTimer, votedFor, state, forfeit
+        global electionTimer, votedFor, state, forfeit,currentTerm,log
         global failedLinks
+
         peer_ip = context.peer().split(":")[-1]
         otherClientNumber = otherClient[peer_ip]
         if failedLinks[int(otherClientNumber)] == 1:
             status_code = grpc.StatusCode.INVALID_ARGUMENT
             context.abort_with_status(grpc.StatusCode.INVALID_ARGUMENT, "")
-    
-      
-        print(f"Received heartbeet: from {otherClient[peer_ip]}")
-        votedFor = int(otherClientNumber)
-        print("voting for",votedFor)
-        if state != "follower":
-            state = "follower"
-            forfeit = 1
+        print(f"Received heartbeat: from {otherClient[peer_ip]}")
         electionTimer = random.randint(20,30)
-        print()
+
+        receivedLog = []
+        for individualLogs in request.entries.message.split(";"):
+            l = []
+            for item in individualLogs.split(','):
+                entry = item.lstrip(' ')
+                if entry.isdigit():
+                    entry = eval(entry)
+                else:
+                    entry = entry.strip("\"")
+                l.append(entry)
+            receivedLog.append(l)
+        print("prevLogterm = ",request.prevLogTerm.term)
+        print("prevLogIndex = ",request.prevLogIndex.index)
+        print("received term from sender/leader = ",request.term.term)
+        print("Current term = ",currentTerm)
+        if currentTerm <= request.term.term:
+            currentTerm = request.term.term
+            writeTermToFile()
+            if state != "follower":
+                state = "follower"
+                forfeit = 1
+                print("Forfeiting election for term",currentTerm)
+            electionTimer = random.randint(20, 30)
+            #while the local log's term at prevlogindex != leader/sender's log's term at prevlogindex
+            #decrement 
+            print("line 79 is",request.prevLogIndex.index != -1)
+            if request.prevLogIndex.index != -1:
+                tempindex = request.prevLogIndex.index
+                print(request.prevLogIndex.index)
+                print("log len is ",len(log))
+                if tempindex >= len(log):
+                    tempindex = len(log) - 1
+                while tempindex >= 0 and log[tempindex][0] != receivedLog[tempindex][0]:
+                    log.pop(-1)
+                    writeLogToFile()
+                    tempindex -= 1
+                print("tempindex=", tempindex)
+                if len(log) < request.prevLogIndex.index + 1:
+                    for i in range(tempindex+1,len(receivedLog)-1): #append everything to match up to everything from tempindex + 1 to last element in receivedLog
+                        if receivedLog[i][1] == 1: #if commited, do that action 
+                            print(receivedLog[i][2])
+                        log.append(receivedLog[i])
+                        performComittedAction()
+                        if len(log) == 1:
+                            log[0][3] = hashlib.sha256(b"").hexdigest()
+                        else:
+                            temp_string_list = list(map(str,log[-2]))
+                            prevListString = ''.join(temp_string_list) 
+                            log[-1][3] = hashlib.sha256(prevListString.encode()).hexdigest()
+                        writeLogToFile()
+            log.append(receivedLog[request.prevLogIndex.index + 1])
+            if len(log) == 1:
+                log[0][3] = hashlib.sha256(b"").hexdigest()
+            else:
+                temp_string_list = list(map(str,log[-2]))
+                prevListString = ''.join(temp_string_list) 
+                log[-1][3] = hashlib.sha256(prevListString.encode()).hexdigest()
+            writeLogToFile()
+            
+        # votedFor = int(otherClientNumber)
+        # if state != "follower":
+        #     state = "follower"
+        #     forfeit = 1      
+        time.sleep(100)
         return empty_pb2.Empty()
+    
+
+
+
+
+
+
     
 class RequestVoteServicer(messaging_pb2_grpc.RequestVoteServicer):
     def SendVoteRequest(self,request,context):
@@ -151,12 +216,6 @@ class AppendEntriesServicer(messaging_pb2_grpc.AppendEntriesServicer):
         peer_ip = context.peer().split(":")[-1]
         print("RECEIVED APPEND")
         otherClientNumber = otherClient[peer_ip] #PID of other client
-        # print("log string received",request.entries)
-
-        print("The sender's term/leader's term received is:", request.term.term)
-        print("The sender's prevLogIndex is: ", request.prevLogIndex.index)
-        print("The sender's prevLogTerm is: ", request.prevLogTerm.term)
-        print("The sender's commitIndex is: ", request.commitIndex.index)
 
         receivedLog = []
         for individualLogs in request.entries.message.split(";"):
@@ -714,8 +773,21 @@ def sendHeartBeats(i):
     votedFor = int(clientNum)
     try:
         if failedLinks[int(i)] != 1:
-            nullret = heartbeatStubs[i].SendHeartbeat(messaging_pb2.Request(message=str(clientNum)))
+            logString = ";".join([",".join(map(str, inner_lst)) for inner_lst in log])
+            if len(log) == 0:
+                prevLogTerm = -1
+            else:
+                prevLogTerm = log[len(log) - 1][0]  
+            args = messaging_pb2.SendAppendEntriesArgs( 
+                term=messaging_pb2.Term(term = currentTerm),
+                prevLogIndex=messaging_pb2.Index(index = len(log) - 1),
+                prevLogTerm = messaging_pb2.Term(term = prevLogTerm),
+                entries = messaging_pb2.Request(message = logString),
+                commitIndex = messaging_pb2.Index(index = -1)
+            )
+            nullret = heartbeatStubs[i].SendHeartbeat(args)
     except grpc.RpcError as e:
+        print(e)
         print("Could not send heartbeat to client",i)
     return
                 

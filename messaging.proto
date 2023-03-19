@@ -65,12 +65,13 @@ message RequestVoteArgs{
     string leaderLog = 2;
 }
 
+
 service Messaging {
     rpc SendMessage(Request) returns (Response) {}
 }
 
 service Heartbeat{
-    rpc SendHeartbeat(Request) returns (google.protobuf.Empty) {} 
+    rpc SendHeartbeat(SendAppendEntriesArgs) returns (google.protobuf.Empty) {} 
 }
 
 service ClientNumber{
