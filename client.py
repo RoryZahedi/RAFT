@@ -100,20 +100,10 @@ class HeartbeatServicer(messaging_pb2_grpc.HeartbeatServicer):
                             prevListString = ''.join(temp_string_list) 
                             log[-1][3] = hashlib.sha256(prevListString.encode()).hexdigest()
                         writeLogToFile()
-            log.append(receivedLog[request.prevLogIndex.index + 1])
-            if len(log) == 1:
-                log[0][3] = hashlib.sha256(b"").hexdigest()
-            else:
-                temp_string_list = list(map(str,log[-2]))
-                prevListString = ''.join(temp_string_list) 
-                log[-1][3] = hashlib.sha256(prevListString.encode()).hexdigest()
-            writeLogToFile()
-            
         # votedFor = int(otherClientNumber)
         # if state != "follower":
         #     state = "follower"
         #     forfeit = 1      
-        time.sleep(100)
         return empty_pb2.Empty()
     
 
@@ -200,7 +190,6 @@ class RequestVoteServicer(messaging_pb2_grpc.RequestVoteServicer):
             term=messaging_pb2.receivedTerm(term=currentTerm),
             vg=messaging_pb2.voteGranted(vote=voteGranted)
         )
-        print("Forfeit = ",forfeit, "for client ",otherClientNumber)
         return response
 
 class AppendEntriesServicer(messaging_pb2_grpc.AppendEntriesServicer):
@@ -684,7 +673,6 @@ def sendElectionRequests(i):
 
 def election():
     #add variable here
-    print("still here")
     global clientNum, votedFor,numVotes,forfeit, electionTimer,state,currentTerm,candidateElectionTimer
     votedFor = int(clientNum)
     writeVotedForToFile()
