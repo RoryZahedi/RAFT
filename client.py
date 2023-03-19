@@ -72,11 +72,22 @@ class RequestVoteServicer(messaging_pb2_grpc.RequestVoteServicer):
         receivedTerm = request.term
         
         leaderLog = request.leaderLog
+        leaderLog = []
         # print("Leader log is ",request.leaderLog)
-        if len(leaderLog) == 0:
+        if len(request.leaderLog) != 0:
             leaderLog = []
-        else:
-            leaderLog = [[eval(item) if item.isdigit() else item.strip("\"") for item in inner.split(",")] for inner in request.leaderLog(";")]
+            logActions = request.leaderLog.split(';')
+            for individualLogs in logActions:
+                l = []
+                for item in individualLogs.split(','):
+                    entry = item.lstrip(' ')
+                    if entry.isdigit():
+                        entry = eval(entry)
+                    else:
+                        entry = entry.strip("\"")
+                    l.append(entry)
+                leaderLog.append(l)
+        
  
         print(f"Received vote request from {otherClientNumber} with term {receivedTerm}")
         voteGranted = False
@@ -578,7 +589,7 @@ def sendElectionRequests(i):
             if voteGranted:
                 numVotes[i] = 1
     except grpc.RpcError as e:
-        print("Could not reach client",i)
+        print("Could not reach client",i, "\n Error:",e)
             
 
 

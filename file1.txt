@@ -20,6 +20,6 @@ DN2NDA1Lyn8WxjG+/7Oizq7kYUZo6YUwwi8L0dJRPWl54leZr3Pab/sCAwEAAQ==
 
 MFswDQYJKoZIhvcNAQEBBQADSgAwRwJAZXMXYsHAA+hV6SXDqJ86zrDoeZd+xPW4
 
-CurrentTerm: 8
-VotedFor: 4
+CurrentTerm: 12
+VotedFor: 0
 log: 
