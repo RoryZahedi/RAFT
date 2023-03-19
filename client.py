@@ -135,6 +135,7 @@ class RequestVoteServicer(messaging_pb2_grpc.RequestVoteServicer):
             term=messaging_pb2.receivedTerm(term=currentTerm),
             vg=messaging_pb2.voteGranted(vote=voteGranted)
         )
+        print("Forfeit = ",forfeit, "for client ",otherClientNumber)
         return response
 
 class AppendEntriesServicer(messaging_pb2_grpc.AppendEntriesServicer):
@@ -151,9 +152,20 @@ class AppendEntriesServicer(messaging_pb2_grpc.AppendEntriesServicer):
         print("RECEIVED APPEND")
         otherClientNumber = otherClient[peer_ip] #PID of other client
         # print("log string received",request.entries)
-       
-        receivedLog = [[eval(item) if item.isdigit() else item.strip("\"") for item in inner.split(",")] for inner in request.entries.message.split(";")]
-        print(receivedLog)
+
+        receivedLog = []
+        for individualLogs in request.entries.message.split(";"):
+            l = []
+            for item in individualLogs.split(','):
+                entry = item.lstrip(' ')
+                if entry.isdigit():
+                    entry = eval(entry)
+                else:
+                    entry = entry.strip("\"")
+                l.append(entry)
+            receivedLog.append(l)
+
+        print("ReceivedLog  = ",receivedLog)
 
         if currentTerm > request.term.term:
             response = messaging_pb2.SendAppendEntriesResponse(
@@ -569,7 +581,7 @@ def terminalInput():
 
         
 def sendElectionRequests(i):
-    global clientNum,clientNumberStubs,messageStubs,requestVotesStub,numVotes,forfeit,currentTerm,log
+    global clientNum,clientNumberStubs,messageStubs,requestVotesStub,numVotes,forfeit,currentTerm,log,state
     print("Sending request to client",i)
     try:
         if failedLinks[int(i)] != 1:
@@ -587,7 +599,9 @@ def sendElectionRequests(i):
             if receivedTerm > currentTerm:
                 currentTerm = receivedTerm
                 writeTermToFile()
-                forfeit = 1     
+                forfeit = 1
+                state = 'follower'
+                print("setting state to ", state, "and forfeit to ",forfeit)
             if voteGranted:
                 numVotes[i] = 1
     except grpc.RpcError as e:
@@ -614,7 +628,7 @@ def election():
         time.sleep(.1)
     
 
-    if sum(numVotes) >= 3:
+    if sum(numVotes) >= 3 and state == 'candidate':
         state = 'leader'
         print('I am the leader')
         return
@@ -677,6 +691,8 @@ def electionTimeout():
 
             # heartbeatTimer = random.randint(10,15)
             heartbeatTimer = 5 #TODO REMOVE THIS
+            print('forfeit = ',forfeit)
+            print('state =',state)
             print("Heartbeat timeout!")
             
 def sendHeartBeats(i):
