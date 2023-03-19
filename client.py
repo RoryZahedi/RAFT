@@ -72,10 +72,10 @@ class HeartbeatServicer(messaging_pb2_grpc.HeartbeatServicer):
                 state = "follower"
                 forfeit = 1
                 print("Forfeiting election for term",currentTerm)
+            votedFor = otherClientNumber
             electionTimer = random.randint(20, 30)
             #while the local log's term at prevlogindex != leader/sender's log's term at prevlogindex
             #decrement 
-            print("line 79 is",request.prevLogIndex.index != -1)
             if request.prevLogIndex.index != -1:
                 tempindex = request.prevLogIndex.index
                 print(request.prevLogIndex.index)
@@ -98,7 +98,7 @@ class HeartbeatServicer(messaging_pb2_grpc.HeartbeatServicer):
                         else:
                             temp_string_list = list(map(str,log[-2]))
                             prevListString = ''.join(temp_string_list) 
-                            log[-1][3] = hashlib.sha256(prevListString.encode()).hexdigest()
+                            log[-1][3] = receivedLog[-1][3]
                         writeLogToFile()
         # votedFor = int(otherClientNumber)
         # if state != "follower":
@@ -203,7 +203,7 @@ class AppendEntriesServicer(messaging_pb2_grpc.AppendEntriesServicer):
             context.abort_with_status(grpc.StatusCode.INVALID_ARGUMENT, "")
         time.sleep(3)
         peer_ip = context.peer().split(":")[-1]
-        print("RECEIVED APPEND")
+        # print("RECEIVED APPEND")
         otherClientNumber = otherClient[peer_ip] #PID of other client
 
         receivedLog = []
@@ -257,17 +257,13 @@ class AppendEntriesServicer(messaging_pb2_grpc.AppendEntriesServicer):
                         if len(log) == 1:
                             log[0][3] = hashlib.sha256(b"").hexdigest()
                         else:
-                            temp_string_list = list(map(str,log[-2]))
-                            prevListString = ''.join(temp_string_list) 
-                            log[-1][3] = hashlib.sha256(prevListString.encode()).hexdigest()
+                            log[-1][3] = receivedLog[-1][3]
                         writeLogToFile()
             log.append(receivedLog[request.prevLogIndex.index + 1])
             if len(log) == 1:
                 log[0][3] = hashlib.sha256(b"").hexdigest()
             else:
-                temp_string_list = list(map(str,log[-2]))
-                prevListString = ''.join(temp_string_list) 
-                log[-1][3] = hashlib.sha256(prevListString.encode()).hexdigest()
+                log[-1][3] = receivedLog[-1][3]
             writeLogToFile()
 
             response = messaging_pb2.SendAppendEntriesResponse(
@@ -659,7 +655,7 @@ def sendElectionRequests(i):
             voteGranted = results.vg.vote #whether requested client gives vote to us or not
         # print(voteGranted)
             if receivedTerm > currentTerm:
-                currentTermx = receivedTerm
+                currentTerm = receivedTerm
                 writeTermToFile()
                 forfeit = 1
                 state = 'follower'
