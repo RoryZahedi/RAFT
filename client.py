@@ -153,6 +153,11 @@ class AppendEntriesServicer(messaging_pb2_grpc.AppendEntriesServicer):
         otherClientNumber = otherClient[peer_ip] #PID of other client
         # print("log string received",request.entries)
 
+        print("The sender's term/leader's term received is:", request.term.term)
+        print("The sender's prevLogIndex is: ", request.prevLogIndex.index)
+        print("The sender's prevLogTerm is: ", request.prevLogTerm.term)
+        print("The sender's commitIndex is: ", request.commitIndex.index)
+
         receivedLog = []
         for individualLogs in request.entries.message.split(";"):
             l = []
@@ -165,7 +170,7 @@ class AppendEntriesServicer(messaging_pb2_grpc.AppendEntriesServicer):
                 l.append(entry)
             receivedLog.append(l)
 
-        print("ReceivedLog  = ",receivedLog)
+        # print("ReceivedLog  = ",receivedLog)
 
         if currentTerm > request.term.term:
             response = messaging_pb2.SendAppendEntriesResponse(
@@ -181,7 +186,6 @@ class AppendEntriesServicer(messaging_pb2_grpc.AppendEntriesServicer):
                 forfeit = 1
                 print("Forfeiting election for term",currentTerm)
             electionTimer = random.randint(20, 30)
-            #implement log stuff later
             #while the local log's term at prevlogindex != leader/sender's log's term at prevlogindex
             #decrement 
             if request.prevLogIndex.index != -1:
@@ -189,15 +193,19 @@ class AppendEntriesServicer(messaging_pb2_grpc.AppendEntriesServicer):
                 print(request.prevLogIndex.index)
                 if tempindex >= len(log):
                     tempindex = len(log) - 1
-                while log[tempindex][0] != receivedLog[tempindex][0] and tempindex >= 0:
+                while tempindex >= 0 and log[tempindex][0] != receivedLog[tempindex][0]:
                     log.pop(-1)
                     writeLogToFile()
                     tempindex -= 1
+                    print("here")
                 if len(log) < request.prevLogIndex.index + 1:
+                    print("printing tempindex, for the example this should be zero", tempindex)
                     for i in range(tempindex+1,len(receivedLog)-1): #append everything to match up to everything from tempindex + 1 to last element in receivedLog
+                        print("value at i prior to iteration is: ", i)
                         if receivedLog[i][1] == 1: #if commited, do that action 
                             print(receivedLog[i][2])
                         log.append(receivedLog[i])
+                        performComittedAction()
                         if len(log) == 1:
                             log[0][3] = hashlib.sha256(b"").hexdigest()
                         else:
@@ -427,15 +435,21 @@ def sendAppendEntriesFunc(command,issuingClientNum = -1, clientIDs = [],dictID =
     
             
 def asynchSendAppendEntries(args,clientNumToSendTo,numSucc):
-    global log, AppendEntriesStubs
+    global log, AppendEntriesStubs, currentTerm, forfeit, state
     print("Sending request to client",clientNumToSendTo)
     try:
         if failedLinks[int(clientNumToSendTo)] != 1:
             results = AppendEntriesStubs[clientNumToSendTo].SendAppendEntries(args)
 
         if results.success.success:
-            numSucc[clientNumToSendTo] = 1                                                
+            numSucc[clientNumToSendTo] = 1
+        else:
+            if results.recipientTerm.term > currentTerm:
+                forfeit = 1
+                state = "follower"
+                currentTerm = results.recipientTerm.term                                             
     except grpc.RpcError as e:
+        print(e)
         print("Could not reach client",clientNumToSendTo)
       
 def asynchSendCommit(i):
@@ -597,7 +611,7 @@ def sendElectionRequests(i):
             voteGranted = results.vg.vote #whether requested client gives vote to us or not
         # print(voteGranted)
             if receivedTerm > currentTerm:
-                currentTerm = receivedTerm
+                currentTermx = receivedTerm
                 writeTermToFile()
                 forfeit = 1
                 state = 'follower'
