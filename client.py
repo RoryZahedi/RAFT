@@ -88,7 +88,7 @@ class HeartbeatServicer(messaging_pb2_grpc.HeartbeatServicer):
                     tempindex -= 1
                 print("tempindex=", tempindex)
                 if len(log) < request.prevLogIndex.index + 1:
-                    for i in range(tempindex+1,len(receivedLog)-1): #append everything to match up to everything from tempindex + 1 to last element in receivedLog
+                    for i in range(tempindex+1,len(receivedLog)): #append everything to match up to everything from tempindex + 1 to last element in receivedLog
                         if receivedLog[i][1] == 1: #if commited, do that action 
                             print(receivedLog[i][2])
                         log.append(receivedLog[i])
