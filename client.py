@@ -169,7 +169,7 @@ class RequestVoteServicer(messaging_pb2_grpc.RequestVoteServicer):
             elif (len(log) ==0 and len(leaderLog) >=0):
                 voteGranted = True
                 votedFor = int(otherClientNumber)
-                print("entered this case")
+                # print("entered this case")
                 #default to leader
             elif int(log[-1][0]) < int(leaderLog[-1][0]):
                 voteGranted = True
@@ -545,7 +545,7 @@ def terminalInput():
         option = input()
         match option:
             case "create":
-                print("Selected: create")
+                # print("Selected: create")
                 print("Please enter list of clients seperated by space.",end='')
                 members = input()
                 # clientIDList = [int(str(x)) for x in members]
@@ -560,7 +560,7 @@ def terminalInput():
                         dictKey = "",
                         dictValue = "" 
                     )
-                    print("Voted for = ",votedFor)
+                    # print("Voted for = ",votedFor)
                     try:
                         if failedLinks[int(votedFor)] != 1:
                             terminalStubs[int(votedFor)].SendTerminalCommandRedirect(args) 
@@ -615,7 +615,10 @@ def terminalInput():
             case "printDict":
                 print("Selected: printDict")
                 dictKey = input("Enter key (PID.COUNTER)")
-                print("Dict = ",replicatedDictionary[dictKey])
+                if dictKey in replicatedDictionary:
+                    print("Dict = ",replicatedDictionary[dictKey])
+                else:
+                    print("key not found.... stupid user moment")
 
             case "printAll":
                 print("Selected: printAll")
@@ -663,7 +666,7 @@ def sendElectionRequests(i):
                 writeTermToFile()
                 forfeit = 1
                 state = 'follower'
-                print("setting state to ", state, "and forfeit to ",forfeit)
+                # print("setting state to ", state, "and forfeit to ",forfeit)
             if voteGranted:
                 numVotes[i] = 1
     except grpc.RpcError as e:
@@ -700,7 +703,7 @@ def election():
         return
     elif candidateElectionTimer == 0:
         return
-    print("exiting election")
+    # print("exiting election")
 
     
 
@@ -752,8 +755,8 @@ def electionTimeout():
 
             # heartbeatTimer = random.randint(10,15)
             heartbeatTimer = 5 #TODO REMOVE THIS
-            print('forfeit = ',forfeit)
-            print('state =',state)
+            # print('forfeit = ',forfeit)
+            # print('state =',state)
             print("Heartbeat timeout!")
             
 def sendHeartBeats(i):
