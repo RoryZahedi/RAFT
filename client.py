@@ -81,10 +81,11 @@ class HeartbeatServicer(messaging_pb2_grpc.HeartbeatServicer):
                     entry = entry.strip("\"")
                 l.append(entry)
             receivedLog.append(l)
-        # print("prevLogterm = ",request.prevLogTerm.term)
-        # print("prevLogIndex = ",request.prevLogIndex.index)
-        # print("received term from sender/leader = ",request.term.term)
-        # print("Current term = ",currentTerm)
+        print("Received log = ",receivedLog)
+        print("prevLogterm = ",request.prevLogTerm.term)
+        print("prevLogIndex = ",request.prevLogIndex.index)
+        print("received term from sender/leader = ",request.term.term)
+        print("Current term = ",currentTerm)
         if currentTerm <= request.term.term:
             currentTerm = request.term.term
             writeTermToFile()
@@ -100,14 +101,14 @@ class HeartbeatServicer(messaging_pb2_grpc.HeartbeatServicer):
             if request.prevLogIndex.index != -1:
                 tempindex = request.prevLogIndex.index
                 # print(request.prevLogIndex.index)
-                # print("log len is ",len(log))
+                print("log len is ",len(log))
                 if tempindex >= len(log):
                     tempindex = len(log) - 1
                 while tempindex >= 0 and log[tempindex][0] != receivedLog[tempindex][0]:
                     log.pop(-1)
                     writeLogToFile()
                     tempindex -= 1
-                # print("tempindex=", tempindex)
+                print("tempindex=", tempindex)
                 if len(log) < request.prevLogIndex.index + 1:
                     for i in range(tempindex+1,len(receivedLog)): #append everything to match up to everything from tempindex + 1 to last element in receivedLog
                         if receivedLog[i][1] == 1: #if commited, do that action 
@@ -405,8 +406,9 @@ def serve(clientNum):
 
 def sendAppendEntriesFunc(command,issuingClientNum = -1, clientIDs = [],dictID = "", dictKey = "", dictValue = ""):
     global currentTerm,clientNum,log,state,AppendEntriesStubs,CommitStubs, channel, AppendEntriesStubsTwo
-    global clientNum,clientNumberStubs,messageStubs,requestVotesStub,numVotes,forfeit,currentTerm,counter
+    global clientNum,clientNumberStubs,messageStubs,requestVotesStub,numVotes,forfeit,currentTerm,counter,heartbeatTimer
 
+    heartbeatTimer = 15
     if len(log) == 0:
         prevLogTerm = -1
     else:
@@ -789,7 +791,7 @@ def electionTimeout():
     
 
             # heartbeatTimer = random.randint(10,15)
-            heartbeatTimer = 5 #TODO REMOVE THIS
+            heartbeatTimer = 15 #TODO REMOVE THIS
             # print('forfeit = ',forfeit)
             # print('state =',state)
             print("Heartbeat timeout!")
