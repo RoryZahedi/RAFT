@@ -155,6 +155,7 @@ class RequestVoteServicer(messaging_pb2_grpc.RequestVoteServicer):
                 forfeit = 1
                 # voteGranted = True
                 # votedFor = int(otherClientNumber)
+                votedFor = -1
                 state = "follower"
                 print("Forfeiting election for term",currentTerm)
                 electionTimer = random.randint(20, 30)
@@ -168,6 +169,7 @@ class RequestVoteServicer(messaging_pb2_grpc.RequestVoteServicer):
             elif (len(log) ==0 and len(leaderLog) >=0):
                 voteGranted = True
                 votedFor = int(otherClientNumber)
+                print("entered this case")
                 #default to leader
             elif int(log[-1][0]) < int(leaderLog[-1][0]):
                 voteGranted = True
