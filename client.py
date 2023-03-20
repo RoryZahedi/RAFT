@@ -44,7 +44,7 @@ class ClientNumberServicer(messaging_pb2_grpc.ClientNumberServicer):
         # print(otherClient)
         i = int(request.message)
         if len(clientNumberStubs) == 5 and secondTime > 3:
-            print("resetting for",i)
+            # print("resetting for",i)
             clientNumberStubs[i] = messaging_pb2_grpc.ClientNumberStub(channel)
             messageStubs[i] = messaging_pb2_grpc.MessagingStub(channel)
             requestVotesStub[i] = messaging_pb2_grpc.RequestVoteStub(channel)
@@ -68,7 +68,7 @@ class HeartbeatServicer(messaging_pb2_grpc.HeartbeatServicer):
             status_code = grpc.StatusCode.INVALID_ARGUMENT
             context.abort_with_status(grpc.StatusCode.INVALID_ARGUMENT, "")
         print(f"Received heartbeat: from {otherClient[peer_ip]}")
-        electionTimer = random.randint(20,30)
+        electionTimer = random.randint(20,35)
 
         receivedLog = []
         for individualLogs in request.entries.message.split(";"):
@@ -81,11 +81,11 @@ class HeartbeatServicer(messaging_pb2_grpc.HeartbeatServicer):
                     entry = entry.strip("\"")
                 l.append(entry)
             receivedLog.append(l)
-        print("Received log = ",receivedLog)
-        print("prevLogterm = ",request.prevLogTerm.term)
-        print("prevLogIndex = ",request.prevLogIndex.index)
-        print("received term from sender/leader = ",request.term.term)
-        print("Current term = ",currentTerm)
+        # print("Received log = ",receivedLog)
+        # print("prevLogterm = ",request.prevLogTerm.term)
+        # print("prevLogIndex = ",request.prevLogIndex.index)
+        # print("received term from sender/leader = ",request.term.term)
+        # print("Current term = ",currentTerm)
         if currentTerm <= request.term.term:
             currentTerm = request.term.term
             writeTermToFile()
@@ -95,20 +95,20 @@ class HeartbeatServicer(messaging_pb2_grpc.HeartbeatServicer):
                 print("Forfeiting election for term",currentTerm)
             votedFor = otherClientNumber
             writeVotedForToFile()
-            electionTimer = random.randint(20, 30)
+            electionTimer = random.randint(20,35)
             #while the local log's term at prevlogindex != leader/sender's log's term at prevlogindex
             #decrement 
             if request.prevLogIndex.index != -1:
                 tempindex = request.prevLogIndex.index
                 # print(request.prevLogIndex.index)
-                print("log len is ",len(log))
+                # print("log len is ",len(log))
                 if tempindex >= len(log):
                     tempindex = len(log) - 1
                 while tempindex >= 0 and log[tempindex][0] != receivedLog[tempindex][0]:
                     log.pop(-1)
                     writeLogToFile()
                     tempindex -= 1
-                print("tempindex=", tempindex)
+                # print("tempindex=", tempindex)
                 if len(log) < request.prevLogIndex.index + 1:
                     for i in range(tempindex+1,len(receivedLog)): #append everything to match up to everything from tempindex + 1 to last element in receivedLog
                         if receivedLog[i][1] == 1: #if commited, do that action 
@@ -167,10 +167,11 @@ class RequestVoteServicer(messaging_pb2_grpc.RequestVoteServicer):
                     l.append(entry)
                 leaderLog.append(l)
         
- 
+
         print(f"Received vote request from {otherClientNumber} with term {receivedTerm}")
         voteGranted = False
         if currentTerm < receivedTerm:
+            print("Received term is greater")
             currentTerm = receivedTerm
             writeTermToFile()
             votedFor = -1
@@ -179,11 +180,11 @@ class RequestVoteServicer(messaging_pb2_grpc.RequestVoteServicer):
                 forfeit = 1
                 # voteGranted = True
                 # votedFor = int(otherClientNumber)
-                votedFor = -1
                 state = "follower"
                 print("Forfeiting election for term",currentTerm)
-                electionTimer = random.randint(20, 30)
+                electionTimer = random.randint(20,35)
         if currentTerm == receivedTerm and (votedFor == -1 or int(votedFor) == int(otherClientNumber)): 
+            print('case 1')
             if len(log) > 0 and len(leaderLog) == 0:
                 return messaging_pb2.electionRequestResponse(
                     term=messaging_pb2.receivedTerm(term=currentTerm),
@@ -191,22 +192,26 @@ class RequestVoteServicer(messaging_pb2_grpc.RequestVoteServicer):
                 )
                 #rejectleader
             elif (len(log) ==0 and len(leaderLog) >=0):
+                print('case 2')
                 voteGranted = True
                 votedFor = int(otherClientNumber)
                 # print("entered this case")
                 #default to leader
             elif int(log[-1][0]) < int(leaderLog[-1][0]):
+                print('case 3')
                 voteGranted = True
                 votedFor = int(otherClientNumber)
                 #default to leader
             elif int(log[-1][0]) == int(leaderLog[-1][0]):
+                print('case 4')
                 if len(log) <= len(leaderLog):
                     voteGranted = True
                     votedFor = int(otherClientNumber)
                     #default to leader
             if voteGranted == True:
+                print('case 5')
                 votedFor = int(otherClientNumber)
-                electionTimer = random.randint(20, 30)
+                electionTimer = random.randint(20,35)
                 writeVotedForToFile()
                 if state != "follower":
                     forfeit = 1
@@ -262,7 +267,7 @@ class AppendEntriesServicer(messaging_pb2_grpc.AppendEntriesServicer):
                 state = "follower"
                 forfeit = 1
                 print("Forfeiting election for term",currentTerm)
-            electionTimer = random.randint(20, 30)
+            electionTimer = random.randint(20,35)
             #while the local log's term at prevlogindex != leader/sender's log's term at prevlogindex
             #decrement 
             if request.prevLogIndex.index != -1:
@@ -408,7 +413,7 @@ def sendAppendEntriesFunc(command,issuingClientNum = -1, clientIDs = [],dictID =
     global currentTerm,clientNum,log,state,AppendEntriesStubs,CommitStubs, channel, AppendEntriesStubsTwo
     global clientNum,clientNumberStubs,messageStubs,requestVotesStub,numVotes,forfeit,currentTerm,counter,heartbeatTimer
 
-    heartbeatTimer = 15
+    heartbeatTimer = 12
     if len(log) == 0:
         prevLogTerm = -1
     else:
@@ -521,13 +526,13 @@ def asynchSendAppendEntries(args,clientNumToSendTo,numSucc):
         if failedLinks[int(clientNumToSendTo)] != 1:
             results = AppendEntriesStubs[clientNumToSendTo].SendAppendEntries(args)
 
-        if results.success.success:
-            numSucc[clientNumToSendTo] = 1
-        else:
-            if results.recipientTerm.term > currentTerm:
-                forfeit = 1
-                state = "follower"
-                currentTerm = results.recipientTerm.term                                             
+            if results.success.success:
+                numSucc[clientNumToSendTo] = 1
+            else:
+                if results.recipientTerm.term > currentTerm:
+                    forfeit = 1
+                    state = "follower"
+                    currentTerm = results.recipientTerm.term                                             
     except grpc.RpcError as e:
         # print(e)
         print("Could not reach client",clientNumToSendTo)
@@ -706,6 +711,8 @@ def sendElectionRequests(i):
                 # print("setting state to ", state, "and forfeit to ",forfeit)
             if voteGranted:
                 numVotes[i] = 1
+            print("Vote was granted = ",voteGranted)
+            print(numVotes)
     except grpc.RpcError as e:
         print("Could not reach client",i)
             
@@ -717,6 +724,7 @@ def election():
     votedFor = int(clientNum)
     writeVotedForToFile()
     numVotes = [0]*5 
+    numVotes[int(clientNum)] = 1
     forfeit = 0
 
     for i in range(0,5):
@@ -728,7 +736,8 @@ def election():
     while sum(numVotes) < 3 and forfeit != 1 and candidateElectionTimer > 0:
         time.sleep(.1)
     
-
+    print("Num votes after while loop = ",numVotes)
+    print("forfeit = ",forfeit)
     if sum(numVotes) >= 3 and state == 'candidate':
         state = 'leader'
         print('I am the leader')
@@ -736,7 +745,7 @@ def election():
     elif forfeit == 1:
         state = 'follower'
         forfeit = 0
-        electionTimer = random.randint(20, 30)
+        electionTimer = random.randint(20, 35)
         return
     elif candidateElectionTimer == 0:
         return
@@ -751,7 +760,7 @@ def candidateElectionTimeout():
             return
         currentTerm = currentTerm + 1
         writeTermToFile()
-        candidateElectionTimer = random.randint(20, 30)
+        candidateElectionTimer = random.randint(20, 35)
         election_thread = threading.Thread(target=election)
         election_thread.start()
         while candidateElectionTimer > 0 and state == 'candidate':
@@ -791,7 +800,7 @@ def electionTimeout():
     
 
             # heartbeatTimer = random.randint(10,15)
-            heartbeatTimer = 15 #TODO REMOVE THIS
+            heartbeatTimer = 12 #TODO REMOVE THIS
             # print('forfeit = ',forfeit)
             # print('state =',state)
             print("Heartbeat timeout!")
@@ -974,12 +983,12 @@ if __name__ == '__main__':
     time.sleep(5)
     
     heartbeatTimer = 0
-    electionTimer = random.randint(20,30)
+    electionTimer = random.randint(20,35)
     
     writeVotedForToFile()
     numVotes = [0]*5
     forfeit = 0
-    candidateElectionTimer = random.randint(20,30)
+    candidateElectionTimer = random.randint(20,35)
     #term, committed, number
    
     writeLogToFile()
