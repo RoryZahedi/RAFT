@@ -376,17 +376,18 @@ def performComittedAction():
     elif command == 'put':
         dictionaryID = str(log[-1][4])
         if dictionaryID in replicatedDictionary:
-            if usingCrypto:
-                initialKey = log[-1][6][128:].decode()
-                newKey = ""
+            print(log[-1][6])
+            if usingCrypto or len(log[-1][6])> 20:                 
+                initialKey = log[-1][6][128:].                newKey = ""
                 for i in range((int(initialKey[-1]))):
                     newKey = newKey + chr(ord(str(initialKey[i])) - 1)
 
-                initialValue = log[-1][7][128:].decode()
-                newValue = ""
+                initialValue = log[-1][7][128:].                newValue = ""
                 for i in range((int(initialValue[-1]))):
                     newValue = newValue + chr(ord(str(initialValue[i])) - 1)
                 
+                print(newKey)
+                print(newValue)
                 replicatedDictionary[dictionaryID][newKey.lower()] = newValue.lower()
             else:
             # [currentTerm, committed, nameofCommand,hash of previous entry, dictionary_id, issuing client's client-id, 
@@ -490,6 +491,7 @@ def sendAppendEntriesFunc(command,issuingClientNum = -1, clientIDs = [],dictID =
             val2 = res[128:256]
             resultantDictVal = val2 + t2.upper() + str(len(dictValue))
             print("Dict Value = ",dictValue)
+            print("using this even though not supposed to")
             log.append([currentTerm,0,command,"",dictID,issuingClientNum,resultantDictKey.encode(),resultantDictVal.encode()])
         else:
             print("Dict Value = ",dictValue)
@@ -582,7 +584,7 @@ def asynchSendCommit(i):
             nullRet = CommitStubs[i].SendCommitUpdate(empty_pb2.Empty())
     except grpc.RpcError as e:
         print("Could not reach client for commit",i)
-        # print(e)
+        print(e)
     return
 
 def run():
@@ -655,6 +657,7 @@ def terminalInput():
                 print("With privacy/encryption? (y/n): ")
                 answer = input()
                 if str(answer) == "y":
+                    print("we are supposed to usingCrypto here")
                     usingCrypto = True
                 else:
                     usingCrypto = False
@@ -976,12 +979,26 @@ def restartClient():
     for individualLogs in logActions:
         l = []
         for item in individualLogs.split(','):
-            entry = item.lstrip(' ')
+            entry = item.lstrip(' ') #strip leading left space
             if entry.isdigit():
                 entry = eval(entry)
             else:
                 entry = entry.strip("\"")
             l.append(entry)
+        if l[2] == "put":
+            if len(l[-2]) > 10:
+                resultantKey = l[-2].                parsedKey = resultantKey[128:]
+                newKey = ""
+                for i in range((int(parsedKey[-1]))):
+                    newKey = newKey + chr(ord(str(parsedKey[i])) - 1)
+                l[-2] = newKey
+                
+                resultantValue = l[-1].                parsedValue = resultantValue[128:]
+                newValue = ""
+                for i in range((int(parsedValue[-1]))):
+                    newValue = newValue + chr(ord(str(parsedValue[i])) - 1)
+                l[-1] = newValue
+
         log.append(l)
         if(l[1]):
             performComittedAction()
