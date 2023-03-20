@@ -41,6 +41,7 @@ message SendAppendEntriesArgs{
     Term prevLogTerm = 3;
     Request entries = 4;//Log
     Index commitIndex = 5;
+    string sendingClientNumber = 6;
 }
 
 message SendAppendEntriesResponse{
@@ -48,9 +49,6 @@ message SendAppendEntriesResponse{
     appendedEntry success = 2;
 }
 
-message SendAppendEntriesArgsTwo{
-    Term term = 1;
-}
 
 message TerminalArgs{
     string commandIssued = 1;
@@ -58,11 +56,13 @@ message TerminalArgs{
     string dictID = 3;
     string dictKey = 4;
     string dictValue = 5;
+    string sendingClientNumber = 6;
 }
 
 message RequestVoteArgs{
     int32 term = 1;
     string leaderLog = 2;
+    string sendingClientNumber = 3;
 }
 
 

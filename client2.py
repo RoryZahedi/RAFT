@@ -1,9 +1,8 @@
 from concurrent import futures
-
-import grpc
-import messaging_pb2
 import secrets
 import string
+import grpc
+import messaging_pb2
 import messaging_pb2_grpc
 import time
 import ipaddress
@@ -21,7 +20,6 @@ from Crypto.Cipher import AES
 from Crypto.Random import get_random_bytes
 
 otherClient = {} #IP/Port -> ClientNum
-
 
 class MessagingServicer(messaging_pb2_grpc.MessagingServicer):
     def SendMessage(self, request, context):
@@ -41,23 +39,111 @@ class ClientNumberServicer(messaging_pb2_grpc.ClientNumberServicer):
     
 class HeartbeatServicer(messaging_pb2_grpc.HeartbeatServicer):
     def SendHeartbeat(self, request, context):
-        global electionTimer, votedFor
+        global electionTimer, votedFor, state, forfeit,currentTerm,log
+        global failedLinks
+
         peer_ip = context.peer().split(":")[-1]
-        otherClient[peer_ip] = request.message
-    
-      
-        print(f"Received heartbeet: from {otherClient[peer_ip]}")
+        otherClientNumber = otherClient[peer_ip]
+        if failedLinks[int(otherClientNumber)] == 1:
+            status_code = grpc.StatusCode.INVALID_ARGUMENT
+            context.abort_with_status(grpc.StatusCode.INVALID_ARGUMENT, "")
+        print(f"Received heartbeat: from {otherClient[peer_ip]}")
         electionTimer = random.randint(20,30)
-        print()
+
+        receivedLog = []
+        for individualLogs in request.entries.message.split(";"):
+            l = []
+            for item in individualLogs.split(','):
+                entry = item.lstrip(' ')
+                if entry.isdigit():
+                    entry = eval(entry)
+                else:
+                    entry = entry.strip("\"")
+                l.append(entry)
+            receivedLog.append(l)
+        # print("prevLogterm = ",request.prevLogTerm.term)
+        # print("prevLogIndex = ",request.prevLogIndex.index)
+        # print("received term from sender/leader = ",request.term.term)
+        # print("Current term = ",currentTerm)
+        if currentTerm <= request.term.term:
+            currentTerm = request.term.term
+            writeTermToFile()
+            if state != "follower":
+                state = "follower"
+                forfeit = 1
+                print("Forfeiting election for term",currentTerm)
+            votedFor = otherClientNumber
+            electionTimer = random.randint(20, 30)
+            #while the local log's term at prevlogindex != leader/sender's log's term at prevlogindex
+            #decrement 
+            if request.prevLogIndex.index != -1:
+                tempindex = request.prevLogIndex.index
+                # print(request.prevLogIndex.index)
+                # print("log len is ",len(log))
+                if tempindex >= len(log):
+                    tempindex = len(log) - 1
+                while tempindex >= 0 and log[tempindex][0] != receivedLog[tempindex][0]:
+                    log.pop(-1)
+                    writeLogToFile()
+                    tempindex -= 1
+                # print("tempindex=", tempindex)
+                if len(log) < request.prevLogIndex.index + 1:
+                    for i in range(tempindex+1,len(receivedLog)): #append everything to match up to everything from tempindex + 1 to last element in receivedLog
+                        if receivedLog[i][1] == 1: #if commited, do that action 
+                            print(receivedLog[i][2])
+                        log.append(receivedLog[i])
+                        performComittedAction()
+                        if len(log) == 1:
+                            log[0][3] = hashlib.sha256(b"").hexdigest()
+                        else:
+                            temp_string_list = list(map(str,log[-2]))
+                            prevListString = ''.join(temp_string_list) 
+                            log[-1][3] = receivedLog[-1][3]
+                        writeLogToFile()
+        # votedFor = int(otherClientNumber)
+        # if state != "follower":
+        #     state = "follower"
+        #     forfeit = 1      
         return empty_pb2.Empty()
+    
+
+
+
+
+
+
     
 class RequestVoteServicer(messaging_pb2_grpc.RequestVoteServicer):
     def SendVoteRequest(self,request,context):
         global currentTerm, votedFor, electionTimer,forfeit,state
-        time.sleep(3)
+        global failedLinks
         peer_ip = context.peer().split(":")[-1]
         otherClientNumber = otherClient[peer_ip]
-        receivedTerm = request.term 
+        # print("Made it here and failed links is",failedLinks)
+        if failedLinks[int(otherClientNumber)] == 1:
+            status_code = grpc.StatusCode.INVALID_ARGUMENT
+            context.abort_with_status(grpc.StatusCode.INVALID_ARGUMENT, "")
+        time.sleep(3)
+        receivedTerm = request.term
+        
+        leaderLog = request.leaderLog
+        leaderLog = []
+        # print("Leader log is ",request.leaderLog)
+        if len(request.leaderLog) != 0:
+            leaderLog = []
+            logActions = request.leaderLog.split(';')
+            for individualLogs in logActions:
+                l = []
+                for item in individualLogs.split(','):
+                    entry = item.lstrip(' ')
+                    if entry.isdigit():
+                        entry = eval(entry)
+                    else:
+                        entry = entry.strip("\"")
+                    l.append(entry)
+                leaderLog.append(l)
+        
+ 
         print(f"Received vote request from {otherClientNumber} with term {receivedTerm}")
         voteGranted = False
         if currentTerm < receivedTerm:
@@ -67,24 +153,39 @@ class RequestVoteServicer(messaging_pb2_grpc.RequestVoteServicer):
             writeVotedForToFile()
             if state != "follower":
                 forfeit = 1
-                voteGranted = True
-                votedFor = int(otherClientNumber)
+                # voteGranted = True
+                votedFor = -1
                 state = "follower"
                 print("Forfeiting election for term",currentTerm)
                 electionTimer = random.randint(20, 30)
-        if currentTerm == receivedTerm and (votedFor == -1 or int(votedFor) == int(otherClientNumber)) and int(clientNum) > int(otherClientNumber):#TODO: hardcoded
-            if state != "follower":
-                forfeit = 1
+        if currentTerm == receivedTerm and (votedFor == -1 or int(votedFor) == int(otherClientNumber)): 
+            if len(log) > 0 and len(leaderLog) == 0:
+                return messaging_pb2.electionRequestResponse(
+                    term=messaging_pb2.receivedTerm(term=currentTerm),
+                    vg=messaging_pb2.voteGranted(vote=False)
+                )
+                #rejectleader
+            elif (len(log) ==0 and len(leaderLog) >=0):
                 voteGranted = True
                 votedFor = int(otherClientNumber)
-                state = "follower"
-                print("Forfeiting election for term",currentTerm)
+                #default to leader
+            elif int(log[-1][0]) < int(leaderLog[-1][0]):
+                voteGranted = True
+                votedFor = int(otherClientNumber)
+                #default to leader
+            elif int(log[-1][0]) == int(leaderLog[-1][0]):
+                if len(log) <= len(leaderLog):
+                    voteGranted = True
+                    votedFor = int(otherClientNumber)
+                    #default to leader
+            if voteGranted == True:
+                votedFor = int(otherClientNumber)
                 electionTimer = random.randint(20, 30)
-            votedFor = int(otherClientNumber)
-            print("Voted for:",votedFor)
-            writeVotedForToFile()
-            voteGranted = True
-            electionTimer = random.randint(20, 30)
+                writeVotedForToFile()
+                if state != "follower":
+                    forfeit = 1
+                    state = "follower"
+                    print("Forfeiting election for term",currentTerm)
         response = messaging_pb2.electionRequestResponse(
             term=messaging_pb2.receivedTerm(term=currentTerm),
             vg=messaging_pb2.voteGranted(vote=voteGranted)
@@ -94,14 +195,30 @@ class RequestVoteServicer(messaging_pb2_grpc.RequestVoteServicer):
 class AppendEntriesServicer(messaging_pb2_grpc.AppendEntriesServicer):
     def SendAppendEntries(self,request,context):
         global currentTerm,state,forfeit, electionTimer, log
+        global failedLinks
+        peer_ip = context.peer().split(":")[-1]
+        otherClientNumber = otherClient[peer_ip]
+        if failedLinks[int(otherClientNumber)] == 1:
+            status_code = grpc.StatusCode.INVALID_ARGUMENT
+            context.abort_with_status(grpc.StatusCode.INVALID_ARGUMENT, "")
         time.sleep(3)
         peer_ip = context.peer().split(":")[-1]
-        print("RECEIVED APPEND")
+        # print("RECEIVED APPEND")
         otherClientNumber = otherClient[peer_ip] #PID of other client
-        # print("log string received",request.entries)
-       
-        receivedLog = [[eval(item) if item.isdigit() else item.strip("\"") for item in inner.split(",")] for inner in request.entries.message.split(";")]
-        print(receivedLog)
+
+        receivedLog = []
+        for individualLogs in request.entries.message.split(";"):
+            l = []
+            for item in individualLogs.split(','):
+                entry = item.lstrip(' ')
+                if entry.isdigit():
+                    entry = eval(entry)
+                else:
+                    entry = entry.strip("\"")
+                l.append(entry)
+            receivedLog.append(l)
+
+        # print("ReceivedLog  = ",receivedLog)
 
         if currentTerm > request.term.term:
             response = messaging_pb2.SendAppendEntriesResponse(
@@ -117,37 +234,36 @@ class AppendEntriesServicer(messaging_pb2_grpc.AppendEntriesServicer):
                 forfeit = 1
                 print("Forfeiting election for term",currentTerm)
             electionTimer = random.randint(20, 30)
-            #implement log stuff later
             #while the local log's term at prevlogindex != leader/sender's log's term at prevlogindex
             #decrement 
             if request.prevLogIndex.index != -1:
                 tempindex = request.prevLogIndex.index
-                print(request.prevLogIndex.index)
+                # print(request.prevLogIndex.index)
                 if tempindex >= len(log):
                     tempindex = len(log) - 1
-                while log[tempindex][0] != receivedLog[tempindex][0] and tempindex >= 0:
+                while tempindex >= 0 and log[tempindex][0] != receivedLog[tempindex][0]:
                     log.pop(-1)
                     writeLogToFile()
                     tempindex -= 1
+                    # print("here")
                 if len(log) < request.prevLogIndex.index + 1:
+                    # print("printing tempindex, for the example this should be zero", tempindex)
                     for i in range(tempindex+1,len(receivedLog)-1): #append everything to match up to everything from tempindex + 1 to last element in receivedLog
+                        # print("value at i prior to iteration is: ", i)
                         if receivedLog[i][1] == 1: #if commited, do that action 
                             print(receivedLog[i][2])
                         log.append(receivedLog[i])
+                        performComittedAction()
                         if len(log) == 1:
                             log[0][3] = hashlib.sha256(b"").hexdigest()
                         else:
-                            temp_string_list = list(map(str,log[-2]))
-                            prevListString = ''.join(temp_string_list) 
-                            log[-1][3] = hashlib.sha256(prevListString.encode()).hexdigest()
+                            log[-1][3] = receivedLog[-1][3]
                         writeLogToFile()
             log.append(receivedLog[request.prevLogIndex.index + 1])
             if len(log) == 1:
                 log[0][3] = hashlib.sha256(b"").hexdigest()
             else:
-                temp_string_list = list(map(str,log[-2]))
-                prevListString = ''.join(temp_string_list) 
-                log[-1][3] = hashlib.sha256(prevListString.encode()).hexdigest()
+                log[-1][3] = receivedLog[-1][3]
             writeLogToFile()
 
             response = messaging_pb2.SendAppendEntriesResponse(
@@ -158,15 +274,21 @@ class AppendEntriesServicer(messaging_pb2_grpc.AppendEntriesServicer):
     
 class RedirectServicer(messaging_pb2_grpc.RedirectServicer):
     def SendTerminalCommandRedirect(self,request,context):
-        print("Entered!!")
+        global failedLinks
         peer_ip = context.peer().split(":")[-1]
         otherClientNumber = otherClient[peer_ip]
-        print("Received", request.commandIssued, "from", str(otherClientNumber))
-        print(request.commandIssued)
-        print(int(otherClientNumber))
-        print(request.clientIDs)
-        print(request.clientIDs)
-        print(request.dictID)
+        if failedLinks[int(otherClientNumber)] == 1:
+            status_code = grpc.StatusCode.INVALID_ARGUMENT
+            context.abort_with_status(grpc.StatusCode.INVALID_ARGUMENT, "")
+
+        peer_ip = context.peer().split(":")[-1]
+        otherClientNumber = otherClient[peer_ip]
+        # print("Received", request.commandIssued, "from", str(otherClientNumber))
+        # print(request.commandIssued)
+        # print(int(otherClientNumber))
+        # print(request.clientIDs)
+        # print(request.clientIDs)
+        # print(request.dictID)
 
         sendAppendEntriesFunc(command = request.commandIssued, issuingClientNum=int(otherClientNumber), 
                               clientIDs=request.clientIDs,dictID=request.dictID,dictKey=request.dictKey,
@@ -177,6 +299,12 @@ class RedirectServicer(messaging_pb2_grpc.RedirectServicer):
 
 class CommitServicer(messaging_pb2_grpc.CommitServicer):
     def SendCommitUpdate(self,request,context):
+        global failedLinks
+        peer_ip = context.peer().split(":")[-1]
+        otherClientNumber = otherClient[peer_ip]
+        if failedLinks[int(otherClientNumber)] == 1:
+            status_code = grpc.StatusCode.INVALID_ARGUMENT
+            context.abort_with_status(grpc.StatusCode.INVALID_ARGUMENT, "")
         global log,replicatedDictionary
         time.sleep(3)
         print("Committing!")
@@ -190,17 +318,19 @@ def performComittedAction():
     global log,clientNum,replicatedDictionary
     # print("log = ",log)
     # print(log[-1][2])
+
     command = log[-1][2].lower()
     
-    print("log = ",log)
+    # print("log = ",log)
     if command == 'create':
 
             #    currentTerm, committed, nameofcomamnd, hash of previous entry, clientlist, 
             # , dictionaryid, dictionary public key, list of dictionary private keys]
-        print("command is create!")
+        # print("command is create!")
         dictionaryID = str(log[-1][5])
-        print
-        clientList = log[-1][4].split()
+        clientList = str(log[-1][4])
+        if len(clientList)>1:
+            clientList = clientList.split()
         if str(clientNum) in clientList:
             replicatedDictionary[dictionaryID] = {}
     elif command == 'put':
@@ -208,19 +338,15 @@ def performComittedAction():
         if dictionaryID in replicatedDictionary:
             # [currentTerm, committed, nameofCommand,hash of previous entry, dictionary_id, issuing client's client-id, 
             # key-vlalue pair encrypted with dictionary public key]
-            resultantKey = log[-1][6][63:]
-            resultantValue = log[-1][7][63:]
-            replicatedDictionary[dictionaryID][resultantKey] = resultantValue
-            print(resultantKey)
-            print(resultantValue)
+            replicatedDictionary[dictionaryID][log[-1][6]] = log[-1][7] 
     elif command == 'get':
         dictionaryID = str(log[-1][4])
-        
-        resultantKey = log[-1][5][63:]
-        print(resultantKey)
-        #  currentTerm,0,command,"",dictID,issuingClientNum]
+        #  currentTerm,0,command,"",dictID,issuingClientNum,dictKey]
         if int(clientNum) == int(log[-1][5]):
-            print("Get returned:",replicatedDictionary[resultantKey])  
+            if log[-1][-1] not in replicatedDictionary[dictionaryID]:
+                print("Key",log[-1][-1], "not found in dict")
+            else:
+                print("Get returned:",replicatedDictionary[dictionaryID][log[-1][-1]])  
     else:
         print("Unknown command:",command)
       
@@ -247,7 +373,7 @@ def serve(clientNum):
 
 def sendAppendEntriesFunc(command,issuingClientNum = -1, clientIDs = [],dictID = "", dictKey = "", dictValue = ""):
     global currentTerm,clientNum,log,state,AppendEntriesStubs,CommitStubs, channel, AppendEntriesStubsTwo
-    global clientNum,clientNumberStubs,messageStubs,requestVotesStub,numVotes,forfeit,currentTerm,counter
+    global clientNum,clientNumberStubs,messageStubs,requestVotesStub,numVotes,forfeit,currentTerm,counter, usingCrypto, privateKey
 
     if len(log) == 0:
         prevLogTerm = -1
@@ -265,17 +391,20 @@ def sendAppendEntriesFunc(command,issuingClientNum = -1, clientIDs = [],dictID =
         private_key = rsa.generate_private_key(public_exponent=65537,key_size=2048,)
         public_key = private_key.public_key()
         private_keyList = []
+        if usingCrypto:
+            private_keyList = len(clientIDs) * [private_key]
+            e
         for i in range(len(clientIDs)):
             res = ''.join(secrets.choice(string.ascii_uppercase + string.digits) for i in range(128))
             private_keyList.append(res.encode())
         # print("priv_keyList:",private_keyList)
-        print(type(clientIDs),print(type(clientIDs) == type(list)))
+        # print(type(clientIDs),print(type(clientIDs) == type(list)))
         s = ''
         if type(clientIDs) != type(str):
             for i in clientIDs:
                 s += i
             clientIDs = s
-        print("Client IDs = ",clientIDs)
+        # print("Client IDs = ",clientIDs)
 
         log.append([currentTerm,0,command,"",clientIDs,dictID, public_key, private_keyList]) #Still not finished; TODO : create actual dict, dictionary public key, list of dictionary private keys
         #currentTerm, committed, nameofcomamnd, hash of previous entry, clientlist, 
@@ -283,41 +412,16 @@ def sendAppendEntriesFunc(command,issuingClientNum = -1, clientIDs = [],dictID =
 
     elif command == 'get':
         
-        res = ''.join(secrets.choice(string.ascii_uppercase + string.digits) for i in range(128))
-        t = ""
-        for i in range(len(dictKey)):
-            t = t + chr(ord(dictKey[i]) + 1)
-        val = res[0:63]
-        end = len(dictKey)
-        final1 = val + t.upper() + str(end)
         # log.append([currentTerm,0,command,"",dictID,issuingClientNum,dictKey])
-        
-
-        log.append([currentTerm,0,command,"",dictID,issuingClientNum, dictKey])
+        log.append([currentTerm,0,command,"",dictID,issuingClientNum,dictKey])
         #get command log entry [currentTerm, committed, nameofCommand, hash of previous entry, 
         # dictionary_id, issuing client's client-id,  key (to get value) encrypted with dictionary public key
         
 
 
     elif command == 'put':
-        res = ''.join(secrets.choice(string.ascii_uppercase + string.digits) for i in range(128))
-        t = ""
-        for i in range(len(dictKey)):
-            t = t + chr(ord(dictKey[i]) + 1)
-        val = res[0:63]
-        end = len(dictKey)
-        final1 = val + t.upper() + str(end)
-
-
-        res = ''.join(secrets.choice(string.ascii_uppercase + string.digits) for i in range(128))
-        t = ""
-        for i in range(len(dictValue)):
-            t = t + chr(ord(dictValue[i]) + 1)
-        val = res[0:63]
-        end = len(dictKey)
-        final2 = val + t.upper() + str(end)
-
-        log.append([currentTerm,0,command,"",dictID,issuingClientNum, final1, final2])
+        print("Dict Value = ",dictValue)
+        log.append([currentTerm,0,command,"",dictID,issuingClientNum,dictKey,dictValue])
         #TODO actually put it
         #put command log entry [currentTerm, committed, nameofCommand,hash of previous entry, dictionary_id, issuing client;s client-id, 
         # key-vlalue pair encrypted with dictionary public key]
@@ -379,27 +483,37 @@ def sendAppendEntriesFunc(command,issuingClientNum = -1, clientIDs = [],dictID =
     
             
 def asynchSendAppendEntries(args,clientNumToSendTo,numSucc):
-    global log, AppendEntriesStubs
+    global log, AppendEntriesStubs, currentTerm, forfeit, state
     print("Sending request to client",clientNumToSendTo)
     try:
-        results = AppendEntriesStubs[clientNumToSendTo].SendAppendEntries(args)
+        if failedLinks[int(clientNumToSendTo)] != 1:
+            results = AppendEntriesStubs[clientNumToSendTo].SendAppendEntries(args)
 
         if results.success.success:
-            numSucc[clientNumToSendTo] = 1                                                
+            numSucc[clientNumToSendTo] = 1
+        else:
+            if results.recipientTerm.term > currentTerm:
+                forfeit = 1
+                state = "follower"
+                currentTerm = results.recipientTerm.term                                             
     except grpc.RpcError as e:
+        print(e)
         print("Could not reach client",clientNumToSendTo)
       
 def asynchSendCommit(i):
     global CommitStubs
+    global failedLinks
     try:
-        nullRet = CommitStubs[i].SendCommitUpdate(empty_pb2.Empty())
+        if failedLinks[int(i)] != 1:
+            nullRet = CommitStubs[i].SendCommitUpdate(empty_pb2.Empty())
     except grpc.RpcError as e:
-        print("Could not reach client for commit",e)
+        print("Could not reach client for commit",i)
+        print(e)
     return
 
 def run():
     global clientNum,clientNumberStubs,messageStubs,requestVotesStub,heartbeatStubs,AppendEntriesStubs, CommitStubs, channel,terminalStubs
-    
+    global failedLinks
     for i in range(0,5): #Initalize clientNumberStubs with clientNumberStubs to send clientNumbers
         if str(i) != clientNum: 
             port = 'localhost:5005'+str(i)
@@ -422,16 +536,23 @@ def run():
     for i in range(0,5): #Send initial message
         if str(i) != clientNum:
             message = str(clientNum)
-            nullret = clientNumberStubs[i].SendClientNumber(messaging_pb2.Request(message=message))
+            if failedLinks[int(i)] != 1:
+                nullret = clientNumberStubs[i].SendClientNumber(messaging_pb2.Request(message=message))
 
 
 def terminalInput():
-    global clientNum,state,votedFor,terminalStubs,getValue,replicatedDictionary,severedLink
+    global clientNum,state,votedFor,terminalStubs,getValue,replicatedDictionary,failedLinks,log, usingCrypto
     while True: #terminal input
         option = input()
         match option:
             case "create":
                 print("Selected: create")
+                print("With privacy/encryption? (y/n): ")
+                answer = input()
+                if str(answer) == "y":
+                    usingCrypto = True
+                else:
+                    usingCrypto = False
                 print("Please enter list of clients seperated by space.",end='')
                 members = input()
                 # clientIDList = [int(str(x)) for x in members]
@@ -447,11 +568,22 @@ def terminalInput():
                         dictValue = "" 
                     )
                     print("Voted for = ",votedFor)
-                    terminalStubs[int(votedFor)].SendTerminalCommandRedirect(args) 
+                    try:
+                        if failedLinks[int(votedFor)] != 1:
+                            terminalStubs[int(votedFor)].SendTerminalCommandRedirect(args) 
+                    except grpc.RpcError as e:
+                        print("Could not reach client",votedFor)
+                    
                 
             case "put":
                 print("Selected: put")
-                print("Please enter DICTID")
+                print("With privacy/encryption? (y/n): ")
+                answer = input()
+                if str(answer) == "y":
+                    usingCrypto = True
+                else:
+                    usingCrypto = False
+                print("Please enter DICTID \n")
                 PID = input("PID:")
                 dIDCounter = input("Counter:")
                 dictID = PID + "." + dIDCounter
@@ -468,12 +600,22 @@ def terminalInput():
                         dictKey = key,
                         dictValue = value
                     )
-                    terminalStubs[int(votedFor)].SendTerminalCommandRedirect(args) 
+                    try:
+                        if failedLinks[int(votedFor)] != 1:
+                            terminalStubs[int(votedFor)].SendTerminalCommandRedirect(args) 
+                    except grpc.RpcError as e:
+                         print("Could not reach client",votedFor)
                 
             case "get":
                 print("Selected: get")
-                dictID = input("Please enter: dictionary ID")
-                key = input("Please enter the dict key")
+                print("With privacy/encryption? (y/n): ")
+                answer = input()
+                if str(answer) == "y":
+                    usingCrypto = True
+                else:
+                    usingCrypto = False
+                dictID = input("Please enter dictionary ID (PID.Counter):")
+                key = input("Please enter the dict key (key):")
                 if state == 'leader':
                     sendAppendEntriesFunc(command= 'Get',issuingClientNum=clientNum,dictID=dictID,dictKey=key)
                 elif state == 'follower':
@@ -484,7 +626,11 @@ def terminalInput():
                         dictKey = key,
                         dictValue = ""
                     )
-                    terminalStubs[int(votedFor)].SendTerminalCommandRedirect(args) 
+                    try:
+                        if failedLinks[int(votedFor)] != 1:
+                            terminalStubs[int(votedFor)].SendTerminalCommandRedirect(args) 
+                    except grpc.RpcError as e:
+                         print("Could not reach client",votedFor)
             case "printDict":
                 print("Selected: printDict")
                 dictKey = input("Enter key (PID.COUNTER)")
@@ -496,17 +642,19 @@ def terminalInput():
     
             case "failLink":
                 print("Selected: failLik")
-                clientToSever = input("Enter the clientNum you'd like to sever the link with:")
-                severedLink[int(clientToSever)] = 1
+                clientNumToSever = int(input("Client connection you wish to sever"))
+                failedLinks[clientNumToSever] = 1
 
             case "fixLink":
                 print("Selected: fixLink")
-                clientToFix = input("Enter the clientNum you'd like to fix the link with")
-                severedLink[int(clientToFix)] = 1
+                clientNumToFix = int(input("Client connection you wish to fix"))
+                failedLinks[clientNumToFix] = 0
 
             case "failProcess":
                 print("Selected: failProcess")
 
+            case "printLog":
+                print("log = ",log)
 
             case _:
                 print("Invalid input,",option)
@@ -514,21 +662,31 @@ def terminalInput():
 
         
 def sendElectionRequests(i):
-    global clientNum,clientNumberStubs,messageStubs,requestVotesStub,numVotes,forfeit,currentTerm
+    global clientNum,clientNumberStubs,messageStubs,requestVotesStub,numVotes,forfeit,currentTerm,log,state
     print("Sending request to client",i)
     try:
-        results = requestVotesStub[i].SendVoteRequest(messaging_pb2.Term(term=currentTerm))
-        receivedTerm = results.term.term #requested client's updated term
-        voteGranted = results.vg.vote #whether requested client gives vote to us or not
-        print(voteGranted)
-        if receivedTerm > currentTerm:
-            currentTerm = receivedTerm
-            writeTermToFile()
-            forfeit = 1     
-        if voteGranted:
-            numVotes[i] = 1
+        if failedLinks[int(i)] != 1:
+            logString = ""
+            if len(log) > 0:
+                logString = ";".join([",".join(map(str, inner_lst)) for inner_lst in log])
+            args = messaging_pb2.RequestVoteArgs( 
+                term=currentTerm,
+                leaderLog = logString
+            )
+            results = requestVotesStub[i].SendVoteRequest(args)
+            receivedTerm = results.term.term #requested client's updated term
+            voteGranted = results.vg.vote #whether requested client gives vote to us or not
+        # print(voteGranted)
+            if receivedTerm > currentTerm:
+                currentTerm = receivedTerm
+                writeTermToFile()
+                forfeit = 1
+                state = 'follower'
+                print("setting state to ", state, "and forfeit to ",forfeit)
+            if voteGranted:
+                numVotes[i] = 1
     except grpc.RpcError as e:
-        print("Could not reach client",i)
+        print("Could not reach client",i, "\n Error:",e)
             
 
 
@@ -550,7 +708,7 @@ def election():
         time.sleep(.1)
     
 
-    if sum(numVotes) >= 3:
+    if sum(numVotes) >= 3 and state == 'candidate':
         state = 'leader'
         print('I am the leader')
         return
@@ -561,7 +719,7 @@ def election():
         return
     elif candidateElectionTimer == 0:
         return
-    
+    print("exiting election")
 
     
 
@@ -577,6 +735,7 @@ def candidateElectionTimeout():
         election_thread.start()
         while candidateElectionTimer > 0 and state == 'candidate':
             # print(candidateElectionTimer)
+            # print("in here")
             time.sleep(1)
             candidateElectionTimer-=1
         election_thread.join()
@@ -612,13 +771,30 @@ def electionTimeout():
 
             # heartbeatTimer = random.randint(10,15)
             heartbeatTimer = 5 #TODO REMOVE THIS
+            print('forfeit = ',forfeit)
+            print('state =',state)
             print("Heartbeat timeout!")
             
 def sendHeartBeats(i):
-    global heartbeatStubs
+    global heartbeatStubs,votedFor
+    votedFor = int(clientNum)
     try:
-        nullret = heartbeatStubs[i].SendHeartbeat(messaging_pb2.Request(message=str(clientNum)))
+        if failedLinks[int(i)] != 1:
+            logString = ";".join([",".join(map(str, inner_lst)) for inner_lst in log])
+            if len(log) == 0:
+                prevLogTerm = -1
+            else:
+                prevLogTerm = log[len(log) - 1][0]  
+            args = messaging_pb2.SendAppendEntriesArgs( 
+                term=messaging_pb2.Term(term = currentTerm),
+                prevLogIndex=messaging_pb2.Index(index = len(log) - 1),
+                prevLogTerm = messaging_pb2.Term(term = prevLogTerm),
+                entries = messaging_pb2.Request(message = logString),
+                commitIndex = messaging_pb2.Index(index = -1)
+            )
+            nullret = heartbeatStubs[i].SendHeartbeat(args)
     except grpc.RpcError as e:
+        print(e)
         print("Could not send heartbeat to client",i)
     return
                 
@@ -641,7 +817,7 @@ def writeLogToFile():
     if len(log) == 0:
         lines[-1] = "log: " + "\n"
     else:
-        print(log)
+        # print(log)
         logString = ";".join([",".join(map(str, inner_lst)) for inner_lst in log])
         lines[-1] = "log: " + logString + "\n"
     with open(filename, 'w') as file:
@@ -700,13 +876,43 @@ def loadKeysAtStart(clientNum):
 
     return pubKeyDict, privateKey, hashkey
 
+def restartClient():
+    global log,filename,votedFor,currentTerm
+    print("log before is",log)
+    lines = [] #content of files
+    with open(filename, 'r') as file:
+        lines = file.readlines()
+    logstr = lines[-1] 
+    votedForColon = lines[-2].find(':')
+    votedFor = int(lines[-2][votedForColon+1:])
+
+    currentTermColon = lines[-3].find(':')
+    currentTerm = int(lines[-3][currentTermColon+1:])
+
+    logColon = lines[-1].find(':')
+    logString = lines[-1][logColon+1:len(lines[-1])-1]
+    logActions = logString.split(';')
+    for individualLogs in logActions:
+        l = []
+        for item in individualLogs.split(','):
+            entry = item.lstrip(' ')
+            if entry.isdigit():
+                entry = eval(entry)
+            else:
+                entry = entry.strip("\"")
+            l.append(entry)
+        log.append(l)
+        if(l[1]):
+            performComittedAction()
+
 if __name__ == '__main__':
     print("Client num:",end="")
     clientNum = input()
+    filename = "file"+str(clientNum)+".txt"
     pubKeyDict, privateKey, hashkey = loadKeysAtStart(clientNum)
+    failedLinks = [0]*5
     start_new_thread(serve, (clientNum,))
-    print("Press enter to start")
-    input()
+    restart = input("Press enter to begin or \'r\' to restart")
 
     channel = 0
     counter = 0
@@ -718,38 +924,39 @@ if __name__ == '__main__':
     AppendEntriesStubs = []
     CommitStubs = []
     terminalStubs = []
+    log = []
+    votedFor = -1
     replicatedDictionary = {}
-    severedLink = [0]*5
+    currentTerm = 0
+    usingCrypto = False
+    if restart == 'r':
+        restartClient()
+        input("Client restored, press enter to connect to the network")
     run()
     
     start_new_thread(terminalInput,())
-    filename = "file"+str(clientNum)+".txt"
+    
 
     lines = [] #content of files
     with open(filename, 'r') as file:
         lines = file.readlines()
 
-    
-    
-
    
     state = "follower"
-    currentTerm = 0
     writeTermToFile()
     
-    time.sleep(10)
+    time.sleep(5)
     
     heartbeatTimer = 0
     electionTimer = random.randint(20,30)
-    votedFor = -1
+    
     writeVotedForToFile()
     numVotes = [0]*5
     forfeit = 0
-    candidateElectionTimer = 1
+    candidateElectionTimer = random.randint(20,30)
     #term, committed, number
-    log = []
+   
     writeLogToFile()
-    #log = [[index, term, committed, dictionary_id, client_numbersthathaveaccess, dictionary public key, version],]
     electionTimeout()
   
     while True:

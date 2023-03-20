@@ -14,7 +14,7 @@ _sym_db = _symbol_database.Default()
 from google.protobuf import empty_pb2 as google_dot_protobuf_dot_empty__pb2
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x0fmessaging.proto\x12\tmessaging\x1a\x1bgoogle/protobuf/empty.proto\"\x1a\n\x07Request\x12\x0f\n\x07message\x18\x01 \x01(\t\"\x1b\n\x08Response\x12\x0f\n\x07message\x18\x01 \x01(\t\"\x14\n\x04Term\x12\x0c\n\x04term\x18\x01 \x01(\x05\"\x1c\n\x0creceivedTerm\x12\x0c\n\x04term\x18\x01 \x01(\x05\"\x16\n\x05Index\x12\r\n\x05index\x18\x01 \x01(\x05\"\x1b\n\x0bvoteGranted\x12\x0c\n\x04vote\x18\x01 \x01(\x08\" \n\rappendedEntry\x12\x0f\n\x07success\x18\x01 \x01(\x08\"d\n\x17\x65lectionRequestResponse\x12%\n\x04term\x18\x01 \x01(\x0b\x32\x17.messaging.receivedTerm\x12\"\n\x02vg\x18\x02 \x01(\x0b\x32\x16.messaging.voteGranted\"\xd0\x01\n\x15SendAppendEntriesArgs\x12\x1d\n\x04term\x18\x01 \x01(\x0b\x32\x0f.messaging.Term\x12&\n\x0cprevLogIndex\x18\x02 \x01(\x0b\x32\x10.messaging.Index\x12$\n\x0bprevLogTerm\x18\x03 \x01(\x0b\x32\x0f.messaging.Term\x12#\n\x07\x65ntries\x18\x04 \x01(\x0b\x32\x12.messaging.Request\x12%\n\x0b\x63ommitIndex\x18\x05 \x01(\x0b\x32\x10.messaging.Index\"n\n\x19SendAppendEntriesResponse\x12&\n\rrecipientTerm\x18\x01 \x01(\x0b\x32\x0f.messaging.Term\x12)\n\x07success\x18\x02 \x01(\x0b\x32\x18.messaging.appendedEntry\"9\n\x18SendAppendEntriesArgsTwo\x12\x1d\n\x04term\x18\x01 \x01(\x0b\x32\x0f.messaging.Term\"l\n\x0cTerminalArgs\x12\x15\n\rcommandIssued\x18\x01 \x01(\t\x12\x11\n\tclientIDs\x18\x02 \x01(\t\x12\x0e\n\x06\x64ictID\x18\x03 \x01(\t\x12\x0f\n\x07\x64ictKey\x18\x04 \x01(\t\x12\x11\n\tdictValue\x18\x05 \x01(\t\"2\n\x0fRequestVoteArgs\x12\x0c\n\x04term\x18\x01 \x01(\x05\x12\x11\n\tleaderLog\x18\x02 \x01(\t2E\n\tMessaging\x12\x38\n\x0bSendMessage\x12\x12.messaging.Request\x1a\x13.messaging.Response\"\x00\x32X\n\tHeartbeat\x12K\n\rSendHeartbeat\x12 .messaging.SendAppendEntriesArgs\x1a\x16.google.protobuf.Empty\"\x00\x32P\n\x0c\x43lientNumber\x12@\n\x10SendClientNumber\x12\x12.messaging.Request\x1a\x16.google.protobuf.Empty\"\x00\x32\x62\n\x0bRequestVote\x12S\n\x0fSendVoteRequest\x12\x1a.messaging.RequestVoteArgs\x1a\".messaging.electionRequestResponse\"\x00\x32n\n\rAppendEntries\x12]\n\x11SendAppendEntries\x12 .messaging.SendAppendEntriesArgs\x1a$.messaging.SendAppendEntriesResponse\"\x00\x32N\n\x06\x43ommit\x12\x44\n\x10SendCommitUpdate\x12\x16.google.protobuf.Empty\x1a\x16.google.protobuf.Empty\"\x00\x32\\\n\x08Redirect\x12P\n\x1bSendTerminalCommandRedirect\x12\x17.messaging.TerminalArgs\x1a\x16.google.protobuf.Empty\"\x00\x62\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x0fmessaging.proto\x12\tmessaging\x1a\x1bgoogle/protobuf/empty.proto\"\x1a\n\x07Request\x12\x0f\n\x07message\x18\x01 \x01(\t\"\x1b\n\x08Response\x12\x0f\n\x07message\x18\x01 \x01(\t\"\x14\n\x04Term\x12\x0c\n\x04term\x18\x01 \x01(\x05\"\x1c\n\x0creceivedTerm\x12\x0c\n\x04term\x18\x01 \x01(\x05\"\x16\n\x05Index\x12\r\n\x05index\x18\x01 \x01(\x05\"\x1b\n\x0bvoteGranted\x12\x0c\n\x04vote\x18\x01 \x01(\x08\" \n\rappendedEntry\x12\x0f\n\x07success\x18\x01 \x01(\x08\"d\n\x17\x65lectionRequestResponse\x12%\n\x04term\x18\x01 \x01(\x0b\x32\x17.messaging.receivedTerm\x12\"\n\x02vg\x18\x02 \x01(\x0b\x32\x16.messaging.voteGranted\"\xed\x01\n\x15SendAppendEntriesArgs\x12\x1d\n\x04term\x18\x01 \x01(\x0b\x32\x0f.messaging.Term\x12&\n\x0cprevLogIndex\x18\x02 \x01(\x0b\x32\x10.messaging.Index\x12$\n\x0bprevLogTerm\x18\x03 \x01(\x0b\x32\x0f.messaging.Term\x12#\n\x07\x65ntries\x18\x04 \x01(\x0b\x32\x12.messaging.Request\x12%\n\x0b\x63ommitIndex\x18\x05 \x01(\x0b\x32\x10.messaging.Index\x12\x1b\n\x13sendingClientNumber\x18\x06 \x01(\t\"n\n\x19SendAppendEntriesResponse\x12&\n\rrecipientTerm\x18\x01 \x01(\x0b\x32\x0f.messaging.Term\x12)\n\x07success\x18\x02 \x01(\x0b\x32\x18.messaging.appendedEntry\"\x89\x01\n\x0cTerminalArgs\x12\x15\n\rcommandIssued\x18\x01 \x01(\t\x12\x11\n\tclientIDs\x18\x02 \x01(\t\x12\x0e\n\x06\x64ictID\x18\x03 \x01(\t\x12\x0f\n\x07\x64ictKey\x18\x04 \x01(\t\x12\x11\n\tdictValue\x18\x05 \x01(\t\x12\x1b\n\x13sendingClientNumber\x18\x06 \x01(\t\"O\n\x0fRequestVoteArgs\x12\x0c\n\x04term\x18\x01 \x01(\x05\x12\x11\n\tleaderLog\x18\x02 \x01(\t\x12\x1b\n\x13sendingClientNumber\x18\x03 \x01(\t2E\n\tMessaging\x12\x38\n\x0bSendMessage\x12\x12.messaging.Request\x1a\x13.messaging.Response\"\x00\x32X\n\tHeartbeat\x12K\n\rSendHeartbeat\x12 .messaging.SendAppendEntriesArgs\x1a\x16.google.protobuf.Empty\"\x00\x32P\n\x0c\x43lientNumber\x12@\n\x10SendClientNumber\x12\x12.messaging.Request\x1a\x16.google.protobuf.Empty\"\x00\x32\x62\n\x0bRequestVote\x12S\n\x0fSendVoteRequest\x12\x1a.messaging.RequestVoteArgs\x1a\".messaging.electionRequestResponse\"\x00\x32n\n\rAppendEntries\x12]\n\x11SendAppendEntries\x12 .messaging.SendAppendEntriesArgs\x1a$.messaging.SendAppendEntriesResponse\"\x00\x32N\n\x06\x43ommit\x12\x44\n\x10SendCommitUpdate\x12\x16.google.protobuf.Empty\x1a\x16.google.protobuf.Empty\"\x00\x32\\\n\x08Redirect\x12P\n\x1bSendTerminalCommandRedirect\x12\x17.messaging.TerminalArgs\x1a\x16.google.protobuf.Empty\"\x00\x62\x06proto3')
 
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, globals())
 _builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'messaging_pb2', globals())
@@ -38,27 +38,25 @@ if _descriptor._USE_C_DESCRIPTORS == False:
   _ELECTIONREQUESTRESPONSE._serialized_start=255
   _ELECTIONREQUESTRESPONSE._serialized_end=355
   _SENDAPPENDENTRIESARGS._serialized_start=358
-  _SENDAPPENDENTRIESARGS._serialized_end=566
-  _SENDAPPENDENTRIESRESPONSE._serialized_start=568
-  _SENDAPPENDENTRIESRESPONSE._serialized_end=678
-  _SENDAPPENDENTRIESARGSTWO._serialized_start=680
-  _SENDAPPENDENTRIESARGSTWO._serialized_end=737
-  _TERMINALARGS._serialized_start=739
+  _SENDAPPENDENTRIESARGS._serialized_end=595
+  _SENDAPPENDENTRIESRESPONSE._serialized_start=597
+  _SENDAPPENDENTRIESRESPONSE._serialized_end=707
+  _TERMINALARGS._serialized_start=710
   _TERMINALARGS._serialized_end=847
   _REQUESTVOTEARGS._serialized_start=849
-  _REQUESTVOTEARGS._serialized_end=899
-  _MESSAGING._serialized_start=901
-  _MESSAGING._serialized_end=970
-  _HEARTBEAT._serialized_start=972
-  _HEARTBEAT._serialized_end=1060
-  _CLIENTNUMBER._serialized_start=1062
-  _CLIENTNUMBER._serialized_end=1142
-  _REQUESTVOTE._serialized_start=1144
-  _REQUESTVOTE._serialized_end=1242
-  _APPENDENTRIES._serialized_start=1244
-  _APPENDENTRIES._serialized_end=1354
-  _COMMIT._serialized_start=1356
-  _COMMIT._serialized_end=1434
-  _REDIRECT._serialized_start=1436
-  _REDIRECT._serialized_end=1528
+  _REQUESTVOTEARGS._serialized_end=928
+  _MESSAGING._serialized_start=930
+  _MESSAGING._serialized_end=999
+  _HEARTBEAT._serialized_start=1001
+  _HEARTBEAT._serialized_end=1089
+  _CLIENTNUMBER._serialized_start=1091
+  _CLIENTNUMBER._serialized_end=1171
+  _REQUESTVOTE._serialized_start=1173
+  _REQUESTVOTE._serialized_end=1271
+  _APPENDENTRIES._serialized_start=1273
+  _APPENDENTRIES._serialized_end=1383
+  _COMMIT._serialized_start=1385
+  _COMMIT._serialized_end=1463
+  _REDIRECT._serialized_start=1465
+  _REDIRECT._serialized_end=1557
 # @@protoc_insertion_point(module_scope)

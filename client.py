@@ -31,11 +31,29 @@ class MessagingServicer(messaging_pb2_grpc.MessagingServicer):
     
 class ClientNumberServicer(messaging_pb2_grpc.ClientNumberServicer):
     def SendClientNumber(self, request, context):
+        global clientNumberStubs,messageStubs,requestVotesStub,heartbeatStubs,AppendEntriesStubs,CommitStubs,terminalStubs,secondTime,clientNum
         peer_ip = context.peer().split(":")[-1]
         otherClient[peer_ip] = request.message
         print(f"Received message: {request.message} from {otherClient[peer_ip]}")
         print()
-        return empty_pb2.Empty()
+
+        port = 'localhost:5005'+str(request.message)
+        channel = grpc.insecure_channel(port)
+        
+
+        # print(otherClient)
+        i = int(request.message)
+        if len(clientNumberStubs) == 5 and secondTime > 3:
+            print("resetting for",i)
+            clientNumberStubs[i] = messaging_pb2_grpc.ClientNumberStub(channel)
+            messageStubs[i] = messaging_pb2_grpc.MessagingStub(channel)
+            requestVotesStub[i] = messaging_pb2_grpc.RequestVoteStub(channel)
+            heartbeatStubs[i] = messaging_pb2_grpc.HeartbeatStub(channel)
+            AppendEntriesStubs[i] = messaging_pb2_grpc.AppendEntriesStub(channel)
+            CommitStubs[i] = messaging_pb2_grpc.CommitStub(channel)
+            terminalStubs[i] = messaging_pb2_grpc.RedirectStub(channel)
+        secondTime += 1
+        return  empty_pb2.Empty()
     
 class HeartbeatServicer(messaging_pb2_grpc.HeartbeatServicer):
     def SendHeartbeat(self, request, context):
@@ -43,6 +61,8 @@ class HeartbeatServicer(messaging_pb2_grpc.HeartbeatServicer):
         global failedLinks
 
         peer_ip = context.peer().split(":")[-1]
+        if peer_ip not in otherClient:
+            otherClient[peer_ip] = request.sendingClientNumber
         otherClientNumber = otherClient[peer_ip]
         if failedLinks[int(otherClientNumber)] == 1:
             status_code = grpc.StatusCode.INVALID_ARGUMENT
@@ -119,6 +139,8 @@ class RequestVoteServicer(messaging_pb2_grpc.RequestVoteServicer):
         global currentTerm, votedFor, electionTimer,forfeit,state
         global failedLinks
         peer_ip = context.peer().split(":")[-1]
+        if peer_ip not in otherClient:
+            otherClient[peer_ip] = request.sendingClientNumber
         otherClientNumber = otherClient[peer_ip]
         # print("Made it here and failed links is",failedLinks)
         if failedLinks[int(otherClientNumber)] == 1:
@@ -201,6 +223,8 @@ class AppendEntriesServicer(messaging_pb2_grpc.AppendEntriesServicer):
         global currentTerm,state,forfeit, electionTimer, log
         global failedLinks
         peer_ip = context.peer().split(":")[-1]
+        if peer_ip not in otherClient:
+            otherClient[peer_ip] = request.sendingClientNumber
         otherClientNumber = otherClient[peer_ip]
         if failedLinks[int(otherClientNumber)] == 1:
             status_code = grpc.StatusCode.INVALID_ARGUMENT
@@ -280,6 +304,8 @@ class RedirectServicer(messaging_pb2_grpc.RedirectServicer):
     def SendTerminalCommandRedirect(self,request,context):
         global failedLinks
         peer_ip = context.peer().split(":")[-1]
+        if peer_ip not in otherClient:
+            otherClient[peer_ip] = request.sendingClientNumber
         otherClientNumber = otherClient[peer_ip]
         if failedLinks[int(otherClientNumber)] == 1:
             status_code = grpc.StatusCode.INVALID_ARGUMENT
@@ -305,6 +331,8 @@ class CommitServicer(messaging_pb2_grpc.CommitServicer):
     def SendCommitUpdate(self,request,context):
         global failedLinks
         peer_ip = context.peer().split(":")[-1]
+        if peer_ip not in otherClient:
+            otherClient[peer_ip] = request.sendingClientNumber
         otherClientNumber = otherClient[peer_ip]
         if failedLinks[int(otherClientNumber)] == 1:
             status_code = grpc.StatusCode.INVALID_ARGUMENT
@@ -451,7 +479,8 @@ def sendAppendEntriesFunc(command,issuingClientNum = -1, clientIDs = [],dictID =
         prevLogIndex=messaging_pb2.Index(index = prevLogIndex),
         prevLogTerm = messaging_pb2.Term(term = prevLogTerm),
         entries = messaging_pb2.Request(message = logString),
-        commitIndex = messaging_pb2.Index(index = -1)
+        commitIndex = messaging_pb2.Index(index = -1),
+        sendingClientNumber = clientNum
     )
   
 
@@ -560,7 +589,8 @@ def terminalInput():
                         clientIDs=clientIDList,
                         dictID = "",
                         dictKey = "",
-                        dictValue = "" 
+                        dictValue = "" ,
+                        sendingClientNumber = clientNum
                     )
                     # print("Voted for = ",votedFor)
                     try:
@@ -587,7 +617,8 @@ def terminalInput():
                         clientIDs="",
                         dictID = dictID,
                         dictKey = str(key),
-                        dictValue = str(value)
+                        dictValue = str(value),
+                        sendingClientNumber = clientNum
                     )
                     try:
                         if failedLinks[int(votedFor)] != 1:
@@ -607,7 +638,8 @@ def terminalInput():
                         clientIDs="",
                         dictID = dictID,
                         dictKey = key,
-                        dictValue = ""
+                        dictValue = "",
+                        sendingClientNumber = clientNum
                     )
                     try:
                         if failedLinks[int(votedFor)] != 1:
@@ -657,7 +689,8 @@ def sendElectionRequests(i):
                 logString = ";".join([",".join(map(str, inner_lst)) for inner_lst in log])
             args = messaging_pb2.RequestVoteArgs( 
                 term=currentTerm,
-                leaderLog = logString
+                leaderLog = logString,
+                sendingClientNumber = clientNum
             )
             results = requestVotesStub[i].SendVoteRequest(args)
             receivedTerm = results.term.term #requested client's updated term
@@ -776,7 +809,8 @@ def sendHeartBeats(i):
                 prevLogIndex=messaging_pb2.Index(index = len(log) - 1),
                 prevLogTerm = messaging_pb2.Term(term = prevLogTerm),
                 entries = messaging_pb2.Request(message = logString),
-                commitIndex = messaging_pb2.Index(index = -1)
+                commitIndex = messaging_pb2.Index(index = -1),
+                sendingClientNumber = clientNum
             )
             nullret = heartbeatStubs[i].SendHeartbeat(args)
     except grpc.RpcError as e:
@@ -897,8 +931,7 @@ if __name__ == '__main__':
     filename = "file"+str(clientNum)+".txt"
     pubKeyDict, privateKey, hashkey = loadKeysAtStart(clientNum)
     failedLinks = [0]*5
-    start_new_thread(serve, (clientNum,))
-    restart = input("Press enter to begin or \'r\' to restart")
+
 
     channel = 0
     counter = 0
@@ -914,6 +947,12 @@ if __name__ == '__main__':
     votedFor = -1
     replicatedDictionary = {}
     currentTerm = 0
+    secondTime = 0
+
+    start_new_thread(serve, (clientNum,))
+    restart = input("Press enter to begin or \'r\' to restart")
+
+    
     if restart == 'r':
         restartClient()
         input("Client restored, press enter to connect to the network")
