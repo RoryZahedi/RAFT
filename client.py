@@ -73,6 +73,7 @@ class HeartbeatServicer(messaging_pb2_grpc.HeartbeatServicer):
                 forfeit = 1
                 print("Forfeiting election for term",currentTerm)
             votedFor = otherClientNumber
+            writeVotedForToFile()
             electionTimer = random.randint(20, 30)
             #while the local log's term at prevlogindex != leader/sender's log's term at prevlogindex
             #decrement 
@@ -188,6 +189,7 @@ class RequestVoteServicer(messaging_pb2_grpc.RequestVoteServicer):
                     forfeit = 1
                     state = "follower"
                     print("Forfeiting election for term",currentTerm)
+        writeVotedForToFile()
         response = messaging_pb2.electionRequestResponse(
             term=messaging_pb2.receivedTerm(term=currentTerm),
             vg=messaging_pb2.voteGranted(vote=voteGranted)
@@ -328,7 +330,7 @@ def performComittedAction():
 
             #    currentTerm, committed, nameofcomamnd, hash of previous entry, clientlist, 
             # , dictionaryid, dictionary public key, list of dictionary private keys]
-        # print("command is create!")
+        print("command is create!")
         dictionaryID = str(log[-1][5])
         clientList = str(log[-1][4])
         if len(clientList)>1:
@@ -496,7 +498,7 @@ def asynchSendAppendEntries(args,clientNumToSendTo,numSucc):
                 state = "follower"
                 currentTerm = results.recipientTerm.term                                             
     except grpc.RpcError as e:
-        print(e)
+        # print(e)
         print("Could not reach client",clientNumToSendTo)
       
 def asynchSendCommit(i):
@@ -507,7 +509,7 @@ def asynchSendCommit(i):
             nullRet = CommitStubs[i].SendCommitUpdate(empty_pb2.Empty())
     except grpc.RpcError as e:
         print("Could not reach client for commit",i)
-        print(e)
+        # print(e)
     return
 
 def run():
@@ -577,15 +579,15 @@ def terminalInput():
                 key = input("Please enter the dict key")
                 value = input("Enter the value you wish to place")
                 if state == 'leader':
-                    sendAppendEntriesFunc(command= 'Put',issuingClientNum=clientNum,dictID=dictID,dictKey=key,dictValue=value)
+                    sendAppendEntriesFunc(command= 'Put',issuingClientNum=clientNum,dictID=dictID,dictKey=str(key),dictValue=str(value))
                     # def sendAppendEntriesFunc(command,issuingClientNum = -1, clientIDs = [],dictID = "", dictKey = "", dictValue = ""):
                 elif state == 'follower': #redirect it
                     args = messaging_pb2.TerminalArgs( 
                         commandIssued="put",
-                        clientIDs=[],
+                        clientIDs="",
                         dictID = dictID,
-                        dictKey = key,
-                        dictValue = value
+                        dictKey = str(key),
+                        dictValue = str(value)
                     )
                     try:
                         if failedLinks[int(votedFor)] != 1:
@@ -598,11 +600,11 @@ def terminalInput():
                 dictID = input("Please enter dictionary ID (PID.Counter):")
                 key = input("Please enter the dict key (key):")
                 if state == 'leader':
-                    sendAppendEntriesFunc(command= 'Get',issuingClientNum=clientNum,dictID=dictID,dictKey=key)
+                    sendAppendEntriesFunc(command= 'Get',issuingClientNum=clientNum,dictID=dictID,dictKey=str(key))
                 elif state == 'follower':
                     args = messaging_pb2.TerminalArgs( 
                         commandIssued="get",
-                        clientIDs=[],
+                        clientIDs="",
                         dictID = dictID,
                         dictKey = key,
                         dictValue = ""
@@ -670,7 +672,7 @@ def sendElectionRequests(i):
             if voteGranted:
                 numVotes[i] = 1
     except grpc.RpcError as e:
-        print("Could not reach client",i, "\n Error:",e)
+        print("Could not reach client",i)
             
 
 
@@ -778,7 +780,7 @@ def sendHeartBeats(i):
             )
             nullret = heartbeatStubs[i].SendHeartbeat(args)
     except grpc.RpcError as e:
-        print(e)
+        # print(e)
         print("Could not send heartbeat to client",i)
     return
                 
