@@ -61,10 +61,10 @@ class HeartbeatServicer(messaging_pb2_grpc.HeartbeatServicer):
                     entry = entry.strip("\"")
                 l.append(entry)
             receivedLog.append(l)
-        print("prevLogterm = ",request.prevLogTerm.term)
-        print("prevLogIndex = ",request.prevLogIndex.index)
-        print("received term from sender/leader = ",request.term.term)
-        print("Current term = ",currentTerm)
+        # print("prevLogterm = ",request.prevLogTerm.term)
+        # print("prevLogIndex = ",request.prevLogIndex.index)
+        # print("received term from sender/leader = ",request.term.term)
+        # print("Current term = ",currentTerm)
         if currentTerm <= request.term.term:
             currentTerm = request.term.term
             writeTermToFile()
@@ -78,15 +78,15 @@ class HeartbeatServicer(messaging_pb2_grpc.HeartbeatServicer):
             #decrement 
             if request.prevLogIndex.index != -1:
                 tempindex = request.prevLogIndex.index
-                print(request.prevLogIndex.index)
-                print("log len is ",len(log))
+                # print(request.prevLogIndex.index)
+                # print("log len is ",len(log))
                 if tempindex >= len(log):
                     tempindex = len(log) - 1
                 while tempindex >= 0 and log[tempindex][0] != receivedLog[tempindex][0]:
                     log.pop(-1)
                     writeLogToFile()
                     tempindex -= 1
-                print("tempindex=", tempindex)
+                # print("tempindex=", tempindex)
                 if len(log) < request.prevLogIndex.index + 1:
                     for i in range(tempindex+1,len(receivedLog)): #append everything to match up to everything from tempindex + 1 to last element in receivedLog
                         if receivedLog[i][1] == 1: #if commited, do that action 
@@ -238,18 +238,18 @@ class AppendEntriesServicer(messaging_pb2_grpc.AppendEntriesServicer):
             #decrement 
             if request.prevLogIndex.index != -1:
                 tempindex = request.prevLogIndex.index
-                print(request.prevLogIndex.index)
+                # print(request.prevLogIndex.index)
                 if tempindex >= len(log):
                     tempindex = len(log) - 1
                 while tempindex >= 0 and log[tempindex][0] != receivedLog[tempindex][0]:
                     log.pop(-1)
                     writeLogToFile()
                     tempindex -= 1
-                    print("here")
+                    # print("here")
                 if len(log) < request.prevLogIndex.index + 1:
-                    print("printing tempindex, for the example this should be zero", tempindex)
+                    # print("printing tempindex, for the example this should be zero", tempindex)
                     for i in range(tempindex+1,len(receivedLog)-1): #append everything to match up to everything from tempindex + 1 to last element in receivedLog
-                        print("value at i prior to iteration is: ", i)
+                        # print("value at i prior to iteration is: ", i)
                         if receivedLog[i][1] == 1: #if commited, do that action 
                             print(receivedLog[i][2])
                         log.append(receivedLog[i])
@@ -326,10 +326,11 @@ def performComittedAction():
 
             #    currentTerm, committed, nameofcomamnd, hash of previous entry, clientlist, 
             # , dictionaryid, dictionary public key, list of dictionary private keys]
-        print("command is create!")
+        # print("command is create!")
         dictionaryID = str(log[-1][5])
-        print
-        clientList = log[-1][4].split()
+        clientList = str(log[-1][4])
+        if len(clientList)>1:
+            clientList = clientList.split()
         if str(clientNum) in clientList:
             replicatedDictionary[dictionaryID] = {}
     elif command == 'put':
@@ -394,13 +395,13 @@ def sendAppendEntriesFunc(command,issuingClientNum = -1, clientIDs = [],dictID =
             res = ''.join(secrets.choice(string.ascii_uppercase + string.digits) for i in range(128))
             private_keyList.append(res.encode())
         # print("priv_keyList:",private_keyList)
-        print(type(clientIDs),print(type(clientIDs) == type(list)))
+        # print(type(clientIDs),print(type(clientIDs) == type(list)))
         s = ''
         if type(clientIDs) != type(str):
             for i in clientIDs:
                 s += i
             clientIDs = s
-        print("Client IDs = ",clientIDs)
+        # print("Client IDs = ",clientIDs)
 
         log.append([currentTerm,0,command,"",clientIDs,dictID, public_key, private_keyList]) #Still not finished; TODO : create actual dict, dictionary public key, list of dictionary private keys
         #currentTerm, committed, nameofcomamnd, hash of previous entry, clientlist, 
@@ -504,6 +505,7 @@ def asynchSendCommit(i):
             nullRet = CommitStubs[i].SendCommitUpdate(empty_pb2.Empty())
     except grpc.RpcError as e:
         print("Could not reach client for commit",i)
+        print(e)
     return
 
 def run():
