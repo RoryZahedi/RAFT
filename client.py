@@ -2,6 +2,7 @@ from concurrent import futures
 import secrets
 import string
 import grpc
+import sys
 import messaging_pb2
 import messaging_pb2_grpc
 import time
@@ -18,6 +19,7 @@ from cryptography.hazmat.primitives.serialization import load_pem_public_key
 from cryptography.hazmat.backends import default_backend
 from Crypto.Cipher import AES
 from Crypto.Random import get_random_bytes
+import os, signal
 
 otherClient = {} #IP/Port -> ClientNum
 
@@ -111,8 +113,8 @@ class HeartbeatServicer(messaging_pb2_grpc.HeartbeatServicer):
                 # print("tempindex=", tempindex)
                 if len(log) < request.prevLogIndex.index + 1:
                     for i in range(tempindex+1,len(receivedLog)): #append everything to match up to everything from tempindex + 1 to last element in receivedLog
-                        if receivedLog[i][1] == 1: #if commited, do that action 
-                            print(receivedLog[i][2])
+                        # if receivedLog[i][1] == 1: #if commited, do that action 
+                        #     print(receivedLog[i][2])
                         log.append(receivedLog[i])
                         performComittedAction()
                         if len(log) == 1:
@@ -184,7 +186,7 @@ class RequestVoteServicer(messaging_pb2_grpc.RequestVoteServicer):
                 print("Forfeiting election for term",currentTerm)
                 electionTimer = random.randint(20,35)
         if currentTerm == receivedTerm and (votedFor == -1 or int(votedFor) == int(otherClientNumber)): 
-            print('case 1')
+            # print('case 1')
             if len(log) > 0 and len(leaderLog) == 0:
                 return messaging_pb2.electionRequestResponse(
                     term=messaging_pb2.receivedTerm(term=currentTerm),
@@ -192,24 +194,24 @@ class RequestVoteServicer(messaging_pb2_grpc.RequestVoteServicer):
                 )
                 #rejectleader
             elif (len(log) ==0 and len(leaderLog) >=0):
-                print('case 2')
+                # print('case 2')
                 voteGranted = True
                 votedFor = int(otherClientNumber)
                 # print("entered this case")
                 #default to leader
             elif int(log[-1][0]) < int(leaderLog[-1][0]):
-                print('case 3')
+                # print('case 3')
                 voteGranted = True
                 votedFor = int(otherClientNumber)
                 #default to leader
             elif int(log[-1][0]) == int(leaderLog[-1][0]):
-                print('case 4')
+                # print('case 4')
                 if len(log) <= len(leaderLog):
                     voteGranted = True
                     votedFor = int(otherClientNumber)
                     #default to leader
             if voteGranted == True:
-                print('case 5')
+                # print('case 5')
                 votedFor = int(otherClientNumber)
                 electionTimer = random.randint(20,35)
                 writeVotedForToFile()
@@ -353,7 +355,7 @@ class CommitServicer(messaging_pb2_grpc.CommitServicer):
         return empty_pb2.Empty()
 
 def performComittedAction():
-    global log,clientNum,replicatedDictionary
+    global log,clientNum,replicatedDictionary, usingCrypto
     # print("log = ",log)
     # print(log[-1][2])
 
@@ -374,9 +376,22 @@ def performComittedAction():
     elif command == 'put':
         dictionaryID = str(log[-1][4])
         if dictionaryID in replicatedDictionary:
+            if usingCrypto:
+                initialKey = log[-1][6][128:].decode()
+                newKey = ""
+                for i in range((int(initialKey[-1]))):
+                    newKey = newKey + chr(ord(str(initialKey[i])) - 1)
+
+                initialValue = log[-1][7][128:].decode()
+                newValue = ""
+                for i in range((int(initialValue[-1]))):
+                    newValue = newValue + chr(ord(str(initialValue[i])) - 1)
+                
+                replicatedDictionary[dictionaryID][newKey.lower()] = newValue.lower()
+            else:
             # [currentTerm, committed, nameofCommand,hash of previous entry, dictionary_id, issuing client's client-id, 
             # key-vlalue pair encrypted with dictionary public key]
-            replicatedDictionary[dictionaryID][log[-1][6]] = log[-1][7] 
+                replicatedDictionary[dictionaryID][log[-1][6]] = log[-1][7] 
     elif command == 'get':
         dictionaryID = str(log[-1][4])
         #  currentTerm,0,command,"",dictID,issuingClientNum,dictKey]
@@ -411,7 +426,7 @@ def serve(clientNum):
 
 def sendAppendEntriesFunc(command,issuingClientNum = -1, clientIDs = [],dictID = "", dictKey = "", dictValue = ""):
     global currentTerm,clientNum,log,state,AppendEntriesStubs,CommitStubs, channel, AppendEntriesStubsTwo
-    global clientNum,clientNumberStubs,messageStubs,requestVotesStub,numVotes,forfeit,currentTerm,counter,heartbeatTimer
+    global clientNum,clientNumberStubs,messageStubs,requestVotesStub,numVotes,forfeit,currentTerm,counter,heartbeatTimer, usingCrypto
 
     heartbeatTimer = 12
     if len(log) == 0:
@@ -430,9 +445,12 @@ def sendAppendEntriesFunc(command,issuingClientNum = -1, clientIDs = [],dictID =
         private_key = rsa.generate_private_key(public_exponent=65537,key_size=2048,)
         public_key = private_key.public_key()
         private_keyList = []
-        for i in range(len(clientIDs)):
-            res = ''.join(secrets.choice(string.ascii_uppercase + string.digits) for i in range(128))
-            private_keyList.append(res.encode())
+        if not usingCrypto:
+            private_keyList = len(clientIDs) * [private_key]
+        else:
+            for i in range(len(clientIDs)):
+                res = ''.join(secrets.choice(string.ascii_uppercase + string.digits) for i in range(128))
+                private_keyList.append(res.encode())
         # print("priv_keyList:",private_keyList)
         # print(type(clientIDs),print(type(clientIDs) == type(list)))
         s = ''
@@ -456,9 +474,28 @@ def sendAppendEntriesFunc(command,issuingClientNum = -1, clientIDs = [],dictID =
 
 
     elif command == 'put':
-        print("Dict Value = ",dictValue)
-        log.append([currentTerm,0,command,"",dictID,issuingClientNum,dictKey,dictValue])
-        #TODO actually put it
+        resultantDictKey = ""
+        resultantDictVal = ""
+        if usingCrypto:
+            res = ''.join(secrets.choice(string.ascii_uppercase + string.digits) for i in range(256))
+            t = ""
+            for i in range(len(dictKey)):
+                t = t + chr(ord(dictKey[i]) + 1)
+            val = res[0:128]
+            resultantDictKey = val + t.upper() + str(len(dictKey))
+
+            t2 = ""
+            for i in range(len(dictValue)):
+                t2 = t2 + chr(ord(dictValue[i]) + 1)
+            val2 = res[128:256]
+            resultantDictVal = val2 + t2.upper() + str(len(dictValue))
+            print("Dict Value = ",dictValue)
+            log.append([currentTerm,0,command,"",dictID,issuingClientNum,resultantDictKey.encode(),resultantDictVal.encode()])
+        else:
+            print("Dict Value = ",dictValue)
+            log.append([currentTerm,0,command,"",dictID,issuingClientNum,dictKey,dictValue])
+        #TODO actually put it        log.append([currentTerm,0,command,"",dictID,issuingClientNum,dictKey,dictValue])
+
         #put command log entry [currentTerm, committed, nameofCommand,hash of previous entry, dictionary_id, issuing client;s client-id, 
         # key-vlalue pair encrypted with dictionary public key]
 
@@ -578,12 +615,18 @@ def run():
 
 
 def terminalInput():
-    global clientNum,state,votedFor,terminalStubs,getValue,replicatedDictionary,failedLinks,log
+    global clientNum,state,votedFor,terminalStubs,getValue,replicatedDictionary,failedLinks,log, usingCrypto
     while True: #terminal input
         option = input()
         match option:
             case "create":
                 # print("Selected: create")
+                print("With privacy/encryption? (y/n): ")
+                answer = input()
+                if str(answer) == "y":
+                    usingCrypto = True
+                else:
+                    usingCrypto = False
                 print("Please enter list of clients seperated by space.",end='')
                 members = input()
                 # clientIDList = [int(str(x)) for x in members]
@@ -609,6 +652,12 @@ def terminalInput():
                 
             case "put":
                 print("Selected: put")
+                print("With privacy/encryption? (y/n): ")
+                answer = input()
+                if str(answer) == "y":
+                    usingCrypto = True
+                else:
+                    usingCrypto = False
                 print("Please enter DICTID \n")
                 PID = input("PID:")
                 dIDCounter = input("Counter:")
@@ -666,7 +715,7 @@ def terminalInput():
                 print("Dict = ",replicatedDictionary)
     
             case "failLink":
-                print("Selected: failLik")
+                print("Selected: failLink")
                 clientNumToSever = int(input("Client connection you wish to sever"))
                 failedLinks[clientNumToSever] = 1
 
@@ -680,6 +729,9 @@ def terminalInput():
 
             case "printLog":
                 print("log = ",log)
+
+            # case "quit":
+            #     os.kill(os.getpid(), signal.SIGINT)
 
             case _:
                 print("Invalid input,",option)
@@ -711,8 +763,6 @@ def sendElectionRequests(i):
                 # print("setting state to ", state, "and forfeit to ",forfeit)
             if voteGranted:
                 numVotes[i] = 1
-            print("Vote was granted = ",voteGranted)
-            print(numVotes)
     except grpc.RpcError as e:
         print("Could not reach client",i)
             
@@ -736,8 +786,8 @@ def election():
     while sum(numVotes) < 3 and forfeit != 1 and candidateElectionTimer > 0:
         time.sleep(.1)
     
-    print("Num votes after while loop = ",numVotes)
-    print("forfeit = ",forfeit)
+    # print("Num votes after while loop = ",numVotes)
+    # print("forfeit = ",forfeit)
     if sum(numVotes) >= 3 and state == 'candidate':
         state = 'leader'
         print('I am the leader')
@@ -909,7 +959,7 @@ def loadKeysAtStart(clientNum):
 
 def restartClient():
     global log,filename,votedFor,currentTerm
-    print("log before is",log)
+    # print("log before is",log)
     lines = [] #content of files
     with open(filename, 'r') as file:
         lines = file.readlines()
@@ -959,7 +1009,7 @@ if __name__ == '__main__':
     replicatedDictionary = {}
     currentTerm = 0
     secondTime = 0
-
+    usingCrypto = False
     start_new_thread(serve, (clientNum,))
     restart = input("Press enter to begin or \'r\' to restart")
 
@@ -967,32 +1017,37 @@ if __name__ == '__main__':
     if restart == 'r':
         restartClient()
         input("Client restored, press enter to connect to the network")
-    run()
-    
-    start_new_thread(terminalInput,())
-    
+    try:
+        run()
+        
+        start_new_thread(terminalInput,())
+        
 
-    lines = [] #content of files
-    with open(filename, 'r') as file:
-        lines = file.readlines()
+        lines = [] #content of files
+        with open(filename, 'r') as file:
+            lines = file.readlines()
 
-   
-    state = "follower"
-    writeTermToFile()
     
-    time.sleep(5)
+        state = "follower"
+        writeTermToFile()
+        
+        time.sleep(5)
+        
+        heartbeatTimer = 0
+        electionTimer = random.randint(20,35)
+        
+        writeVotedForToFile()
+        numVotes = [0]*5
+        forfeit = 0
+        candidateElectionTimer = random.randint(20,35)
+        #term, committed, number
     
-    heartbeatTimer = 0
-    electionTimer = random.randint(20,35)
-    
-    writeVotedForToFile()
-    numVotes = [0]*5
-    forfeit = 0
-    candidateElectionTimer = random.randint(20,35)
-    #term, committed, number
-   
-    writeLogToFile()
-    electionTimeout()
+        writeLogToFile()
+        electionTimeout()
+    except SystemExit:
+        print("Quitting code")
+    finally:
+        os.kill(os.getpid(), signal.SIGINT)
   
     while True:
         time.sleep(1)
